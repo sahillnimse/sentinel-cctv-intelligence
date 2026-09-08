@@ -9,6 +9,7 @@ which it is without a portal session cookie.
 import json
 import logging
 import socket
+import time
 import urllib.error
 import urllib.request
 from urllib.parse import urlparse
@@ -31,10 +32,26 @@ class SentinelGridAdapter:
         return bool(settings.grid_rtsp_base)
 
     def info(self) -> AdapterInfo:
-        detail = ("catalogue reachable" if self._catalogue()
+        # info() is called on every page load of the Federation view, so the
+        # catalogue probe is cached. Without this each render costs a network
+        # round trip with a 10s worst case.
+        reachable = self._catalogue_cached() is not None
+        detail = ("catalogue reachable" if reachable
                   else "catalogue behind login, using documented id range")
         return AdapterInfo(self.key, self.label, self.vendor, self.protocols,
                            self.configured(), detail)
+
+    _cache: tuple[float, list[dict] | None] = (0.0, None)
+    CACHE_TTL = 60.0
+
+    def _catalogue_cached(self) -> list[dict] | None:
+        now = time.monotonic()
+        stamp, value = SentinelGridAdapter._cache
+        if now - stamp < self.CACHE_TTL:
+            return value
+        value = self._catalogue()
+        SentinelGridAdapter._cache = (now, value)
+        return value
 
     def _catalogue(self) -> list[dict] | None:
         url = settings.grid_catalog_url
@@ -60,7 +77,7 @@ class SentinelGridAdapter:
         return data if isinstance(data, list) else None
 
     def discover(self) -> list[DiscoveredCamera]:
-        rows = self._catalogue()
+        rows = self._catalogue_cached()
         if rows:
             return [self._from_catalogue(r) for r in rows]
         log.info("falling back to cam01..cam%02d", FALLBACK_COUNT)
