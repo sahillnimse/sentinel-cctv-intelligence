@@ -99,7 +99,7 @@ export default function Dashboard() {
                 <tbody>
                   {sum.top_cameras.slice(0, 8).map((c) => (
                     <tr key={c.name}><td>{c.name}</td>
-                      <td style={{ textAlign: 'right' }} className="mono">{c.count}</td></tr>
+                      <td style={{ textAlign: 'right' }} className="mono">{c.vehicles}</td></tr>
                   ))}
                 </tbody>
               </table>

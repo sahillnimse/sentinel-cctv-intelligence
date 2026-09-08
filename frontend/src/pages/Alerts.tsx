@@ -2,12 +2,17 @@ import { useEffect, useState } from 'react'
 import { api } from '../api'
 import type { Alert } from '../api'
 
-export default function Alerts() {
+export default function Alerts({ onSeen }: { onSeen?: () => void }) {
   const [rows, setRows] = useState<Alert[]>([])
   const [err, setErr] = useState('')
 
   const load = () => api.alerts().then(setRows).catch((e) => setErr(String(e.message ?? e)))
-  useEffect(() => { load(); const t = setInterval(load, 8000); return () => clearInterval(t) }, [])
+  useEffect(() => {
+    load()
+    onSeen?.()
+    const t = setInterval(load, 8000)
+    return () => clearInterval(t)
+  }, [])
 
   const ack = async (id: number) => { await api.ackAlert(id); load() }
   const open = rows.filter((r) => !r.acknowledged).length

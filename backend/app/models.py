@@ -86,6 +86,23 @@ class WatchlistEntry(Base):
     photo: Mapped[str] = mapped_column(String(300), default="")  # enrollment snapshot filename
 
 
+class AuditLog(Base):
+    """Append-only record of every mutating API call. Required for an
+    evidentiary chain: who changed the watchlist, who started analytics on
+    which camera, who acknowledged which alert."""
+
+    __tablename__ = "audit_log"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ts: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    username: Mapped[str] = mapped_column(String(100), default="", index=True)
+    role: Mapped[str] = mapped_column(String(20), default="")
+    action: Mapped[str] = mapped_column(String(10), default="")   # HTTP method
+    target: Mapped[str] = mapped_column(String(300), default="")  # request path
+    status: Mapped[int] = mapped_column(default=0)                # response code
+    detail: Mapped[str] = mapped_column(Text, default="")
+
+
 class Alert(Base):
     __tablename__ = "alerts"
 

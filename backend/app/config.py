@@ -16,6 +16,14 @@ class Settings(BaseSettings):
     jwt_secret: str = "dev-secret-change-me"
     admin_username: str = "admin"
     admin_password: str = "admin123"
+    operator_username: str = "operator"
+    operator_password: str = "operator123"
+    viewer_username: str = "viewer"
+    viewer_password: str = "viewer123"
+    token_ttl_hours: int = 12
+    # Mutating /api calls always require a token. Reads are open by default so
+    # the sandbox dashboards work without a login; set true to lock them too.
+    auth_enforce_reads: bool = False
     sample_interval_ms: int = 400
     min_plate_confidence: float = 0.5
     # boot: how many cameras auto-start, and the delay between each starting

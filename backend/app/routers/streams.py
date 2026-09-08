@@ -36,7 +36,8 @@ def start_all(db: Session = Depends(get_db)):
 @router.get("/status")
 def status():
     return {"anpr": pipeline.load_status(), "workers": worker_status(),
-            "go2rtc_url": settings.go2rtc_url}
+            "go2rtc_url": settings.go2rtc_url,
+            "whep_base": settings.grid_whep_base}
 
 
 @router.get("/{camera_id}/snapshot")

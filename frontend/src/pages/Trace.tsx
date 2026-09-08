@@ -1,18 +1,19 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import type { TraceResult } from '../api'
 import MapView from '../components/MapView'
 import type { Pin } from '../components/MapView'
 
 export default function Trace() {
-  const [plate, setPlate] = useState('')
+  const [params, setParams] = useSearchParams()
+  const [plate, setPlate] = useState(params.get('plate') ?? '')
   const [res, setRes] = useState<TraceResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
 
-  const search = async (e: React.FormEvent) => {
-    e.preventDefault()
-    const p = plate.trim().toUpperCase().replace(/\s+/g, '')
+  const run = useCallback(async (raw: string) => {
+    const p = raw.trim().toUpperCase().replace(/\s+/g, '')
     if (!p) return
     setLoading(true)
     setErr('')
@@ -24,6 +25,18 @@ export default function Trace() {
     } finally {
       setLoading(false)
     }
+  }, [])
+
+  // Deep link from the detection log: /trace?plate=GJ01AB1234 runs immediately.
+  useEffect(() => {
+    const q = params.get('plate')
+    if (q) run(q)
+  }, [params, run])
+
+  const search = (e: React.FormEvent) => {
+    e.preventDefault()
+    setParams(plate ? { plate } : {})
+    run(plate)
   }
 
   const route = res?.route ?? []

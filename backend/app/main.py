@@ -132,6 +132,62 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+READ_METHODS = {"GET", "HEAD", "OPTIONS"}
+
+
+@app.middleware("http")
+async def rbac_and_audit(request, call_next):
+    """One gate for every /api call.
+
+    Mutations need a token whose role meets the path's requirement. Reads are
+    open unless auth_enforce_reads is set. Every mutation is written to the
+    audit trail with the caller, the outcome and the path.
+    """
+    from fastapi.responses import JSONResponse
+
+    from .security import audit, claims_from_header, rank, required_role
+
+    path = request.url.path
+    method = request.method
+
+    if not path.startswith("/api") or path.startswith("/api/auth/login"):
+        return await call_next(request)
+
+    claims = claims_from_header(request.headers.get("authorization"))
+    is_read = method in READ_METHODS
+
+    if is_read:
+        if settings.auth_enforce_reads and claims is None:
+            return JSONResponse({"detail": "Not authenticated"}, status_code=401)
+        return await call_next(request)
+
+    need = required_role(path)
+    if need is not None:
+        if claims is None:
+            return JSONResponse({"detail": "Not authenticated"}, status_code=401)
+        if rank(claims.get("role", "")) < rank(need):
+            db = SessionLocal()
+            try:
+                audit(db, user=claims.get("sub", ""), role=claims.get("role", ""),
+                      action=method, target=path, status=403,
+                      detail={"required_role": need})
+            finally:
+                db.close()
+            return JSONResponse(
+                {"detail": f"Requires {need} role or higher"}, status_code=403)
+
+    response = await call_next(request)
+
+    db = SessionLocal()
+    try:
+        audit(db,
+              user=(claims or {}).get("sub", ""),
+              role=(claims or {}).get("role", ""),
+              action=method, target=path, status=response.status_code)
+    finally:
+        db.close()
+    return response
+
 for r in (auth.router, cameras.router, watchlist.router, sightings.router,
           alerts.router, streams.router, copilot.router, vehicles.router,
           vahan.router, evidence.router, demo.router, fleet.router,
