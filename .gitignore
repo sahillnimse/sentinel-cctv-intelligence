@@ -1,0 +1,11 @@
+venv/
+__pycache__/
+*.pyc
+.env
+data/samples/*.mp4
+data/samples/*.mkv
+models/*.onnx
+models/*.engine
+bench/results/*.json
+node_modules/
+dist/

@@ -1,0 +1,22 @@
+# Capacity settings. These are per-machine and get re-benchmarked on new hardware.
+# Dev box: Ryzen 5 3550H, GTX 1650 4GB, 6GB usable RAM.
+
+decode:
+  # Which hwaccel to use per worker pool. Empty string means software decode.
+  primary: cuda        # NVDEC on the discrete GPU
+  secondary: amf       # VCN on the Vega 8 iGPU, used when primary pool is full
+  max_concurrent_primary: 8
+  max_concurrent_secondary: 4
+  sample_fps: 3        # frames per second pulled per camera, not the stream fps
+
+analytics:
+  detector_input: 512
+  precision: fp16
+  motion_gate: true
+  motion_threshold: 0.004   # fraction of pixels changed before we bother inferring
+
+scheduler:
+  # Total analytics slots available. Cameras beyond this are onboarded and
+  # viewable but get cycled through analytics rather than run continuously.
+  slots: 12
+  cycle_seconds: 30
