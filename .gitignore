@@ -1,11 +1,24 @@
+# python
+backend/.venv/
 venv/
 __pycache__/
 *.pyc
-.env
+
+# secrets and local state
+backend/.env
+backend/sentinel.db
+backend/snapshots/*
+!backend/snapshots/.gitkeep
+
+# model weights — large, ship with the deploy not the repo
+backend/models/*.onnx
+backend/models/*.pt
+
+# node
+frontend/node_modules/
+frontend/dist/
+
+# local media and bench output
 data/samples/*.mp4
 data/samples/*.mkv
-models/*.onnx
-models/*.engine
 bench/results/*.json
-node_modules/
-dist/

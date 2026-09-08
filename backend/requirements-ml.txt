@@ -1,0 +1,10 @@
+# ANPR stack — install after the core requirements:
+#   pip install -r requirements-ml.txt
+#
+# Lightweight ONNX-based plate detection + OCR (no PyTorch needed, runs on CPU):
+fast-plate-ocr[onnx]>=0.3
+open-image-models>=0.2
+onnxruntime>=1.18
+
+# Optional heavier stack if you want to fine-tune / use custom YOLO weights:
+# ultralytics>=8.2

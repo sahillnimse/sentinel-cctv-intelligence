@@ -1,0 +1,11 @@
+name,department,camera_type,rtsp_url,latitude,longitude,location_name
+GNR-Sec18-Junction-01,Police,IP,,23.2231,72.6501,Sector 18 Junction Gandhinagar
+GNR-CH-Road-02,Police,IP,,23.2156,72.6369,CH Road Gandhinagar
+AMD-Ashram-Rd-01,Municipal,IP,,23.0333,72.5714,Ashram Road Ahmedabad
+AMD-SG-Highway-02,Police,ANPR,,23.0469,72.5316,SG Highway Ahmedabad
+AMD-Kalupur-Stn-03,GSRTC,IP,,23.0258,72.6011,Kalupur Bus Station Ahmedabad
+VAD-Alkapuri-01,Police,IP,,22.3103,73.1668,Alkapuri Vadodara
+SUR-Ring-Rd-01,Municipal,PTZ,,21.1959,72.8302,Ring Road Surat
+RAJ-Trikon-Baug-01,Police,IP,,22.2925,70.7929,Trikon Baug Rajkot
+GNR-Civil-Hosp-01,Health,IP,,23.2394,72.6486,Civil Hospital Gandhinagar
+MEH-Highway-Chk-01,RTO,ANPR,,23.5880,72.3693,Mehsana Highway Checkpoint

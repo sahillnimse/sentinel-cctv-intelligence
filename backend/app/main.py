@@ -1,0 +1,146 @@
+import asyncio
+import logging
+from contextlib import asynccontextmanager
+from datetime import datetime
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from sqlalchemy import inspect, text
+
+from . import ws
+from .anpr.worker import start_worker, stop_all
+from .config import settings
+from .db import engine
+from .models import Base, Camera
+from .db import SessionLocal
+from .routers import (alerts, analytics, auth, cameras, copilot, demo, evidence,
+                      fleet, sightings, streams, vahan, vehicles, watchlist)
+
+log = logging.getLogger("sentinel")
+logging.basicConfig(level=logging.INFO)
+
+# Columns added after the first schema shipped. SQLite create_all() won't ALTER
+# existing tables, so add any missing columns in place (preserves data).
+_MIGRATIONS = {
+    "cameras": {"heading": "FLOAT DEFAULT 0.0", "fov_deg": "FLOAT DEFAULT 55.0",
+                "range_m": "FLOAT DEFAULT 80.0", "hls_url": "TEXT DEFAULT ''",
+                "external_id": "VARCHAR(50) DEFAULT ''"},
+    "sightings": {"pts_ms": "FLOAT DEFAULT 0.0", "sha256": "VARCHAR(64) DEFAULT ''"},
+    "vehicle_detections": {"img_x": "FLOAT DEFAULT 0.5", "img_y": "FLOAT DEFAULT 0.9",
+                           "sha256": "VARCHAR(64) DEFAULT ''"},
+    "watchlist": {"kind": "VARCHAR(20) DEFAULT 'vehicle'", "embedding": "BLOB",
+                  "photo": "VARCHAR(300) DEFAULT ''"},
+}
+
+
+def _migrate():
+    insp = inspect(engine)
+    existing_tables = set(insp.get_table_names())
+    with engine.begin() as conn:
+        for table, cols in _MIGRATIONS.items():
+            if table not in existing_tables:
+                continue
+            have = {c["name"] for c in insp.get_columns(table)}
+            for col, ddl in cols.items():
+                if col not in have:
+                    conn.execute(text(f'ALTER TABLE {table} ADD COLUMN {col} {ddl}'))
+                    log.info("migrated: %s.%s added", table, col)
+
+
+def _retention_prune():
+    """Bound the DB: periodically drop detections/sightings older than the
+    retention window. Applies in both live and sandbox modes so looping clips or
+    a long session never stack the DB unbounded. Real evidence within the window
+    is untouched. Runs on a daemon thread."""
+    import threading
+    import time
+    from datetime import timedelta
+    from .models import Sighting, VehicleDetection
+
+    mins = settings.detection_retention_min
+    if not mins or mins <= 0:
+        return
+
+    def loop():
+        while True:
+            time.sleep(300)  # every 5 min
+            try:
+                from .db import SessionLocal as _S
+                dbp = _S()
+                cutoff = datetime.utcnow() - timedelta(minutes=mins)
+                nv = dbp.query(VehicleDetection).filter(VehicleDetection.ts < cutoff).delete(synchronize_session=False)
+                ns = dbp.query(Sighting).filter(Sighting.ts < cutoff).delete(synchronize_session=False)
+                dbp.commit()
+                dbp.close()
+                if nv or ns:
+                    log.info("retention prune: removed %d detections, %d sightings older than %dm", nv, ns, mins)
+            except Exception:
+                log.exception("retention prune failed")
+
+    threading.Thread(target=loop, name="retention-prune", daemon=True).start()
+
+
+def _autostart_workers():
+    """Bring the grid live on boot — no manual 'start analytics'. Workers are
+    staggered on a background thread so 30 HEVC decoders don't spin up at once
+    and spike memory (that OOM-crashed an early build). AUTOSTART_MAX_CAMERAS
+    caps how many come up on constrained machines."""
+    import threading
+    import time
+
+    db = SessionLocal()
+    try:
+        cams = db.query(Camera).filter(Camera.rtsp_url != "").order_by(Camera.id).all()
+        ids = [c.id for c in cams][: settings.autostart_max_cameras]
+    finally:
+        db.close()
+
+    def stagger():
+        for cid in ids:
+            start_worker(cid)
+            time.sleep(settings.autostart_stagger_ms / 1000.0)
+        log.info("auto-started analytics on %d cameras", len(ids))
+
+    threading.Thread(target=stagger, name="autostart", daemon=True).start()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    Base.metadata.create_all(engine)
+    _migrate()
+    ws.set_loop(asyncio.get_running_loop())
+    from .agent import plate_llm
+    plate_llm.start()
+    _retention_prune()
+    if settings.demo_simulate:
+        from . import sim
+        sim.start()  # sandbox mode: generate live detections (also stops workers)
+    else:
+        _autostart_workers()
+    yield
+    stop_all()
+
+
+app = FastAPI(title="SENTINEL — Unified CCTV Intelligence Platform", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+for r in (auth.router, cameras.router, watchlist.router, sightings.router,
+          alerts.router, streams.router, copilot.router, vehicles.router,
+          vahan.router, evidence.router, demo.router, fleet.router,
+          analytics.router):
+    app.include_router(r, prefix="/api")
+
+app.mount("/snapshots", StaticFiles(directory=settings.snapshot_dir), name="snapshots")
+
+
+@app.get("/api/health")
+def health():
+    return {"status": "ok", "service": "sentinel-backend"}
