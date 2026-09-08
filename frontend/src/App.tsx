@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard'
 import LiveWall from './pages/LiveWall'
 import Cameras from './pages/Cameras'
 import Coverage from './pages/Coverage'
+import Federation from './pages/Federation'
 import Trace from './pages/Trace'
 import Detections from './pages/Detections'
 import Analytics from './pages/Analytics'
@@ -39,6 +40,7 @@ const SECTIONS: { title: string; items: Item[] }[] = [
     title: 'Network',
     items: [
       { to: '/cameras', label: 'Cameras & GIS' },
+      { to: '/federation', label: 'Federation' },
       { to: '/coverage', label: 'Coverage & Gaps' },
       { to: '/fleet', label: 'Fleet Health' },
     ],
@@ -125,6 +127,7 @@ export default function App() {
           <Route path="/watchlist" element={<Watchlist />} />
           <Route path="/cameras" element={<Cameras />} />
           <Route path="/coverage" element={<Coverage />} />
+          <Route path="/federation" element={<Federation />} />
           <Route path="/fleet" element={<Fleet />} />
           <Route path="/audit" element={<Audit />} />
           <Route path="*" element={<div className="empty">Page not found.</div>} />

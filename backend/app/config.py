@@ -46,6 +46,19 @@ class Settings(BaseSettings):
     edge_timeout_s: float = 10.0
     edge_spool_path: Path = BASE_DIR / "spool" / "edge.db"
     edge_spool_max_rows: int = 100_000
+
+    # --- federation adapters ---
+    # ONVIF WS-Discovery scans the local network for cameras. Off by default:
+    # multicast on an unknown network is a surprise nobody asked for.
+    onvif_discovery_enabled: bool = False
+    onvif_discovery_timeout_s: float = 4.0
+    onvif_default_department: str = "Police"
+    # Manually configured RTSP kit: comma-separated "name=url" pairs.
+    rtsp_sources: str = ""
+    rtsp_default_department: str = "Police"
+    # A directory of video files federated as a second, non-network system.
+    local_media_dir: str = ""
+    local_media_department: str = "Archive"
     snapshot_dir: Path = BASE_DIR / "snapshots"
 
     # Sentinel camera grid (government-provided mock feeds)

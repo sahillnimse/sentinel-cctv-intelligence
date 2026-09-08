@@ -163,6 +163,33 @@ export type GapAnalysis = {
   by_department: { department: string; total: number; online: number }[]
 }
 
+export type AdapterInfo = {
+  key: string
+  label: string
+  vendor: string
+  protocols: string[]
+  configured: boolean
+  detail: string
+}
+
+export type DiscoveredCamera = {
+  external_id: string
+  name: string
+  rtsp_url: string
+  hls_url: string
+  whep_url: string
+  department: string
+  camera_type: string
+  location_name: string
+  latitude: number
+  longitude: number
+  codec: string
+  resolution: string
+  vendor: string
+  reachable: boolean | null
+  extra: Record<string, unknown>
+}
+
 export type AuditRow = {
   id: number
   ts: string
@@ -262,6 +289,14 @@ export const api = {
     req<GapAnalysis>(`/api/analytics/gap-analysis?cell_km=${cellKm}&reach_km=${reachKm}`),
   fleetHealth: () => req<FleetHealth>('/api/fleet/health'),
   workers: () => req<WorkerStatus>('/api/streams/status'),
+
+  adapters: () => req<AdapterInfo[]>('/api/adapters'),
+  discoverAdapter: (key: string, probe = false) =>
+    req<{ adapter: string; count: number; cameras: DiscoveredCamera[] }>(
+      `/api/adapters/${key}/discover?probe=${probe}`),
+  onboardAdapter: (key: string) =>
+    req<{ adapter: string; created: number; updated: number; discovered: number }>(
+      `/api/adapters/${key}/onboard`, { method: 'POST' }),
 
   cameras: () => req<Camera[]>('/api/cameras'),
   createCamera: (body: Partial<CameraIn>) =>
