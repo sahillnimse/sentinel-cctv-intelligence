@@ -84,3 +84,15 @@ class TestRequiredRole:
 
     def test_longest_prefix_wins(self):
         assert required_role("/api/cameras/anything/deep") == "admin"
+
+
+class TestReadRoles:
+    def test_audit_needs_admin(self):
+        from app.security import required_read_role
+        assert required_read_role("/api/auth/audit") == "admin"
+
+    def test_most_reads_are_public(self):
+        from app.security import required_read_role
+        for path in ("/api/cameras", "/api/alerts", "/api/analytics/summary",
+                     "/api/auth/me", "/api/fleet/health"):
+            assert required_read_role(path) is None, path

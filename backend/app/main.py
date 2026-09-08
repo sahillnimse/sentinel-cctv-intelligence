@@ -57,7 +57,6 @@ def _retention_prune():
     import threading
     import time
     from datetime import timedelta
-    from .models import Sighting, VehicleDetection
 
     mins = settings.detection_retention_min
     if not mins or mins <= 0:
@@ -69,17 +68,48 @@ def _retention_prune():
             try:
                 from .db import SessionLocal as _S
                 dbp = _S()
-                cutoff = datetime.utcnow() - timedelta(minutes=mins)
-                nv = dbp.query(VehicleDetection).filter(VehicleDetection.ts < cutoff).delete(synchronize_session=False)
-                ns = dbp.query(Sighting).filter(Sighting.ts < cutoff).delete(synchronize_session=False)
-                dbp.commit()
-                dbp.close()
-                if nv or ns:
-                    log.info("retention prune: removed %d detections, %d sightings older than %dm", nv, ns, mins)
+                try:
+                    n = prune_older_than(dbp, datetime.utcnow() - timedelta(minutes=mins))
+                    if any(n.values()):
+                        log.info("retention prune: %s (older than %dm)", n, mins)
+                finally:
+                    dbp.close()
             except Exception:
                 log.exception("retention prune failed")
 
     threading.Thread(target=loop, name="retention-prune", daemon=True).start()
+
+
+def prune_older_than(db, cutoff: datetime) -> dict[str, int]:
+    """Drop detections and sightings older than `cutoff`, and the alerts that
+    reference them.
+
+    Alerts must go first. An alert carries sighting_id, and its evidence is the
+    sighting's snapshot; deleting the sighting alone leaves an alert pointing at
+    a row that no longer exists, which the alerts view then renders with no
+    evidence behind it. Anything an operator has not acknowledged is kept
+    regardless of age — an outstanding alert is not housekeeping.
+    """
+    from .models import Alert, Sighting, VehicleDetection
+
+    stale_sightings = db.query(Sighting.id).filter(Sighting.ts < cutoff).subquery()
+    alerts = (db.query(Alert)
+              .filter(Alert.sighting_id.in_(db.query(stale_sightings.c.id)),
+                      Alert.acknowledged.is_(True))
+              .delete(synchronize_session=False))
+
+    # Keep any sighting still referenced by a surviving (unacknowledged) alert.
+    referenced = db.query(Alert.sighting_id).subquery()
+    sightings = (db.query(Sighting)
+                 .filter(Sighting.ts < cutoff,
+                         ~Sighting.id.in_(db.query(referenced.c.sighting_id)))
+                 .delete(synchronize_session=False))
+
+    detections = (db.query(VehicleDetection)
+                  .filter(VehicleDetection.ts < cutoff)
+                  .delete(synchronize_session=False))
+    db.commit()
+    return {"alerts": alerts, "sightings": sightings, "detections": detections}
 
 
 def _autostart_workers():
@@ -150,7 +180,8 @@ async def rbac_and_audit(request, call_next):
     """
     from fastapi.responses import JSONResponse
 
-    from .security import audit, claims_from_header, rank, required_role
+    from .security import (audit, claims_from_header, rank, required_read_role,
+                           required_role)
 
     path = request.url.path
     method = request.method
@@ -164,6 +195,14 @@ async def rbac_and_audit(request, call_next):
     if is_read:
         if settings.auth_enforce_reads and claims is None:
             return JSONResponse({"detail": "Not authenticated"}, status_code=401)
+        # Some reads are sensitive regardless of the global read setting.
+        need_read = required_read_role(path)
+        if need_read is not None:
+            if claims is None:
+                return JSONResponse({"detail": "Not authenticated"}, status_code=401)
+            if rank(claims.get("role", "")) < rank(need_read):
+                return JSONResponse(
+                    {"detail": f"Requires {need_read} role or higher"}, status_code=403)
         return await call_next(request)
 
     need = required_role(path)

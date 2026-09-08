@@ -408,6 +408,12 @@ class CameraWorker(threading.Thread):
         if last is not None and mono_now - last < DEDUP_SECONDS:
             return
         self._recent[plate] = mono_now
+        # Prune like _recent_vehicles does. Without this the map keeps one entry
+        # per distinct plate string forever, and noisy OCR invents new strings
+        # continuously, so a worker left running for days grows without bound.
+        if len(self._recent) > 500:
+            self._recent = {p: t for p, t in self._recent.items()
+                            if mono_now - t < DEDUP_SECONDS}
 
         # annotated snapshot for evidence
         x1, y1, x2, y2 = box

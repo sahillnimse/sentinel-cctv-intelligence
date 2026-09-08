@@ -103,10 +103,27 @@ MUTATION_ROLES = {
 
 DEFAULT_MUTATION_ROLE = "operator"
 
+# Reads are open by default so the sandbox dashboards work without a login.
+# These are the exceptions: endpoints whose *contents* are sensitive even
+# though reading them changes nothing. The audit trail names every operator
+# who touched the system and records failed logins, so it is not public.
+READ_ROLES = {
+    "/api/auth/audit": "admin",
+}
+
 
 def required_role(path: str) -> str | None:
     best, best_len = DEFAULT_MUTATION_ROLE, -1
     for prefix, role in MUTATION_ROLES.items():
+        if path.startswith(prefix) and len(prefix) > best_len:
+            best, best_len = role, len(prefix)
+    return best
+
+
+def required_read_role(path: str) -> str | None:
+    """Minimum role to READ this path, or None when it is public."""
+    best, best_len = None, -1
+    for prefix, role in READ_ROLES.items():
         if path.startswith(prefix) and len(prefix) > best_len:
             best, best_len = role, len(prefix)
     return best

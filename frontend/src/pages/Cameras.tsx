@@ -66,7 +66,7 @@ export default function Cameras() {
   const save = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!editing) return
-    const { id, status, last_seen, ...body } = editing as any
+    const { id, status: _status, last_seen: _last_seen, ...body } = editing as any
     await act('save', () => (id ? api.updateCamera(id, body) : api.createCamera(body)),
               () => (id ? 'Camera updated' : 'Camera added'))
     setEditing(null)

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api } from '../api'
+import { api, can } from '../api'
 import type { WatchlistEntry } from '../api'
 
 const REASONS = ['stolen', 'wanted', 'blacklisted', 'missing']
@@ -10,6 +10,10 @@ export default function Watchlist() {
   const [label, setLabel] = useState('')
   const [reason, setReason] = useState('stolen')
   const [err, setErr] = useState('')
+
+  // Editing the watchlist is an operator action. The server enforces it; the
+  // UI hides the controls so a viewer isn't offered buttons that only 403.
+  const canEdit = can('operator')
 
   const load = () => api.watchlist().then(setRows).catch((e) => setErr(String(e.message ?? e)))
   useEffect(() => { load() }, [])
@@ -42,6 +46,7 @@ export default function Watchlist() {
       </div>
       {err && <div className="err">{err}</div>}
 
+      {canEdit && (
       <div className="panel">
         <h3>Add vehicle</h3>
         <form className="row" onSubmit={add}>
@@ -55,6 +60,7 @@ export default function Watchlist() {
           <button className="primary" type="submit">Add</button>
         </form>
       </div>
+      )}
 
       <div className="panel">
         <h3>Entries</h3>
@@ -74,7 +80,9 @@ export default function Watchlist() {
                     {new Date(r.created_at).toLocaleDateString()}
                   </td>
                   <td style={{ textAlign: 'right' }}>
-                    <button className="danger" onClick={() => remove(r.id)}>Remove</button>
+                    {canEdit && (
+                      <button className="danger" onClick={() => remove(r.id)}>Remove</button>
+                    )}
                   </td>
                 </tr>
               ))}

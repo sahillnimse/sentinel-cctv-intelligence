@@ -333,6 +333,11 @@ export const api = {
 
   vahan: (plate: string) => req<any>(`/api/vahan/${encodeURIComponent(plate)}`),
   copilotStatus: () => req<{ configured: boolean; model: string }>('/api/copilot/status'),
+  seedDemo: (plate = 'GJ01AB1234', count = 6) =>
+    req<{ plate: string; cameras: string[]; sightings_created: number; alert_id: number | null }>(
+      `/api/demo/seed?plate=${encodeURIComponent(plate)}&count=${count}`,
+      { method: 'POST' }
+    ),
 }
 
 export function snapshotUrl(cameraId: number, bust: number) {

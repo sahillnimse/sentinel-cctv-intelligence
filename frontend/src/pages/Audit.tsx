@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { api } from '../api'
+import { api, can } from '../api'
 import type { AuditRow } from '../api'
 
 export default function Audit() {
@@ -7,12 +7,34 @@ export default function Audit() {
   const [q, setQ] = useState('')
   const [err, setErr] = useState('')
 
+  // The trail names every operator who touched the system and records failed
+  // logins, so it is admin-only. The server enforces this too; this just
+  // avoids showing a page that would only ever render a 403.
+  const allowed = can('admin')
+
   useEffect(() => {
+    if (!allowed) return
     const load = () => api.audit(300).then(setRows).catch((e) => setErr(e.message ?? String(e)))
     load()
     const t = setInterval(load, 12000)
     return () => clearInterval(t)
-  }, [])
+  }, [allowed])
+
+  if (!allowed) {
+    return (
+      <>
+        <h2>Audit Trail</h2>
+        <div className="sub">Administrator access required</div>
+        <div className="panel">
+          <div className="empty">
+            The audit trail records who changed what, including failed sign-in
+            attempts, so it is restricted to administrators.
+            <br />Sign in as an administrator to view it.
+          </div>
+        </div>
+      </>
+    )
+  }
 
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase()

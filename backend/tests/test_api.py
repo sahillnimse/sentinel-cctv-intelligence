@@ -86,7 +86,8 @@ class TestAccessControl:
     def test_denials_are_audited(self, client):
         client.post("/api/cameras", json={"name": "x"},
                     headers=hdr(token(client, "viewer", "viewer123")))
-        rows = client.get("/api/auth/audit?limit=100").json()
+        rows = client.get("/api/auth/audit?limit=100",
+                          headers=hdr(token(client, "admin", "admin123"))).json()
         assert any(r["status"] == 403 and r["username"] == "viewer" for r in rows)
 
 
@@ -194,3 +195,30 @@ class TestEdge:
                         "plate": "GJ01AB1234", "confidence": 0.9}],
         })
         assert r.json()["accepted"] == 1
+
+
+class TestSensitiveReads:
+    """The audit trail names every operator who touched the system and records
+    failed logins. Reads are open generally; this one is not."""
+
+    def test_audit_requires_a_token(self, client):
+        assert client.get("/api/auth/audit").status_code == 401
+
+    def test_viewer_cannot_read_audit(self, client):
+        r = client.get("/api/auth/audit", headers=hdr(token(client, "viewer", "viewer123")))
+        assert r.status_code == 403
+
+    def test_operator_cannot_read_audit(self, client):
+        r = client.get("/api/auth/audit",
+                       headers=hdr(token(client, "operator", "operator123")))
+        assert r.status_code == 403
+
+    def test_admin_can_read_audit(self, client):
+        r = client.get("/api/auth/audit", headers=hdr(token(client, "admin", "admin123")))
+        assert r.status_code == 200
+        assert isinstance(r.json(), list)
+
+    def test_ordinary_reads_stay_open(self, client):
+        # The fix must not close the dashboards to anonymous viewers.
+        for ep in ("cameras", "alerts", "analytics/summary", "fleet/health"):
+            assert client.get(f"/api/{ep}").status_code == 200, ep

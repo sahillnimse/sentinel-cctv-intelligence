@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { MapContainer, Rectangle, TileLayer, CircleMarker, Tooltip } from 'react-leaflet'
 import { api } from '../api'
 import type { Camera, GapAnalysis } from '../api'
@@ -15,15 +15,15 @@ export default function Coverage() {
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
 
-  const load = () => {
+  const load = useCallback(() => {
     setLoading(true)
     Promise.all([api.gapAnalysis(cellKm, reachKm), api.cameras()])
       .then(([g, c]) => { setData(g); setCams(c); setErr('') })
       .catch((e) => setErr(e.message ?? String(e)))
       .finally(() => setLoading(false))
-  }
+  }, [cellKm, reachKm])
 
-  useEffect(() => { load() }, [cellKm, reachKm])
+  useEffect(() => { load() }, [load])
 
   const located = cams.filter((c) => c.latitude && c.longitude)
   const centre: [number, number] = located.length
