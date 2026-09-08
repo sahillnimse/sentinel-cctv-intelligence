@@ -90,6 +90,16 @@ def trace(plate: str, fuzzy: bool = True, db: Session = Depends(get_db)):
     except Exception:
         vahan = {}
 
+    # Every government authority's view of this vehicle, folded into the same
+    # payload. A stolen-vehicle FIR from eGujCop is the answer the test case is
+    # actually looking for, and an investigator should not have to know which
+    # system holds it. One authority failing must not lose the others.
+    try:
+        from .. import integrations
+        registry = integrations.lookup_vehicle(target)
+    except Exception:
+        registry = []
+
     # Match the watchlist the same way the live alert pipeline does. Exact
     # equality here contradicted the rest of the trace: the route is assembled
     # fuzzily, and alerts are raised fuzzily, so tracing a plate the OCR read
@@ -109,6 +119,8 @@ def trace(plate: str, fuzzy: bool = True, db: Session = Depends(get_db)):
     return TraceResult(
         plate=target, route=route_pts, summary=summary, vahan=vahan,
         watchlisted=wl is not None, watchlist_reason=(wl.reason if wl else ""),
+        registry=registry,
+        registry_alerts=[a for r in registry for a in r.get("alerts", [])],
     )
 
 

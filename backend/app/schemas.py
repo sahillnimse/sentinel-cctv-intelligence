@@ -74,6 +74,10 @@ class TraceResult(BaseModel):
     vahan: dict = {}
     watchlisted: bool = False
     watchlist_reason: str = ""
+    # One entry per government authority queried (VAHAN, eGujCop, ...).
+    registry: list[dict] = []
+    # Flattened reasons this vehicle matters, from any authority.
+    registry_alerts: list[str] = []
 
 
 class WatchlistIn(BaseModel):

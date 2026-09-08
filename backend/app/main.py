@@ -14,9 +14,9 @@ from .config import settings
 from .db import engine
 from .models import Base, Camera
 from .db import SessionLocal
-from .routers import (adapters, alerts, analytics, auth, cameras, copilot, demo, edge,
-                      evidence, fleet, sightings, streams, vahan, vehicles,
-                      watchlist)
+from .routers import (adapters, alerts, analytics, auth, cameras, copilot, demo,
+                      edge, evidence, fleet, integrations, sightings, streams,
+                      vahan, vehicles, watchlist)
 
 log = logging.getLogger("sentinel")
 logging.basicConfig(level=logging.INFO)
@@ -235,7 +235,8 @@ async def rbac_and_audit(request, call_next):
 for r in (auth.router, cameras.router, watchlist.router, sightings.router,
           alerts.router, streams.router, copilot.router, vehicles.router,
           vahan.router, evidence.router, demo.router, fleet.router,
-          analytics.router, edge.router, adapters.router):
+          analytics.router, edge.router, adapters.router,
+          integrations.router):
     app.include_router(r, prefix="/api")
 
 app.mount("/snapshots", StaticFiles(directory=settings.snapshot_dir), name="snapshots")
