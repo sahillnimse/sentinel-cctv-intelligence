@@ -13,15 +13,34 @@ from ..utils.plates import normalize, plates_match
 router = APIRouter(prefix="/sightings", tags=["sightings"])
 
 
+def _matching_plates(db, target: str, fuzzy: bool) -> list[str]:
+    """Plate strings in the database that resolve to `target`.
+
+    Fuzzy matching cannot be pushed into SQL, but it does not need to run over
+    every sighting. Distinct plate strings are bounded by the number of
+    vehicles seen, not by how many times each was seen, so we match against
+    that small set and then fetch only the sightings that matter.
+    """
+    if not fuzzy:
+        return [target]
+    seen = [p for (p,) in db.query(Sighting.plate).distinct().all() if p]
+    return [p for p in seen if plates_match(p, target)]
+
+
 def _build_route(db, plate: str, fuzzy: bool) -> list[RoutePoint]:
     target = normalize(plate)
     if not target:
         raise HTTPException(400, "Empty plate")
-    q = db.query(Sighting).options(joinedload(Sighting.camera))
-    if fuzzy:
-        sightings = [s for s in q.order_by(Sighting.ts).all() if plates_match(s.plate, target)]
-    else:
-        sightings = q.filter(Sighting.plate == target).order_by(Sighting.ts).all()
+
+    plates = _matching_plates(db, target, fuzzy)
+    if not plates:
+        return []
+
+    sightings = (db.query(Sighting)
+                 .options(joinedload(Sighting.camera))
+                 .filter(Sighting.plate.in_(plates))
+                 .order_by(Sighting.ts)
+                 .all())
 
     pts = [
         {"sighting_id": s.id, "camera_id": s.camera_id,
@@ -71,8 +90,22 @@ def trace(plate: str, fuzzy: bool = True, db: Session = Depends(get_db)):
     except Exception:
         vahan = {}
 
-    wl = (db.query(WatchlistEntry)
-          .filter(WatchlistEntry.plate == target, WatchlistEntry.active.is_(True)).first())
+    # Match the watchlist the same way the live alert pipeline does. Exact
+    # equality here contradicted the rest of the trace: the route is assembled
+    # fuzzily, and alerts are raised fuzzily, so tracing a plate the OCR read
+    # as 2BH9249H against a watchlist holding 26BH9249H found the route and
+    # then reported the vehicle as clear.
+    entries = (db.query(WatchlistEntry)
+               .filter(WatchlistEntry.active.is_(True)).all())
+    wl = next((e for e in entries if plates_match(target, e.plate)), None)
+    if wl is None and fuzzy:
+        # Also consider the plate strings actually recorded for this vehicle,
+        # in case the watchlist holds the clean plate and the query was a misread.
+        for p in {pt.plate for pt in route_pts}:
+            wl = next((e for e in entries if plates_match(p, e.plate)), None)
+            if wl is not None:
+                break
+
     return TraceResult(
         plate=target, route=route_pts, summary=summary, vahan=vahan,
         watchlisted=wl is not None, watchlist_reason=(wl.reason if wl else ""),
