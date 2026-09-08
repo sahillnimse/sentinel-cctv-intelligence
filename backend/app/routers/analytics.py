@@ -63,6 +63,9 @@ def summary(minutes: int = 60, db: Session = Depends(get_db)):
     total = len(rows)
     return {
         "window_minutes": minutes,
+        # Each point in `series` covers this many minutes, not one. Without it
+        # a caller cannot label the chart correctly.
+        "bucket_minutes": bucket_min,
         "totals": {
             "vehicles": total, "plates": plates_total,
             "plate_yield_pct": round(100 * plates_total / total, 1) if total else 0.0,

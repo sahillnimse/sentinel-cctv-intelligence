@@ -73,10 +73,10 @@ export default function Watchlist() {
               {rows.map((r) => (
                 <tr key={r.id}>
                   <td className="mono"><strong>{r.plate || '—'}</strong></td>
-                  <td>{r.label || <span style={{ color: 'var(--dim)' }}>—</span>}</td>
+                  <td>{r.label || <span style={{ color: 'var(--text-dim)' }}>—</span>}</td>
                   <td><span className="pill flag">{r.reason}</span></td>
-                  <td style={{ color: 'var(--dim)' }}>{r.kind}</td>
-                  <td className="mono" style={{ color: 'var(--dim)' }}>
+                  <td style={{ color: 'var(--text-dim)' }}>{r.kind}</td>
+                  <td className="mono" style={{ color: 'var(--text-dim)' }}>
                     {new Date(r.created_at).toLocaleDateString()}
                   </td>
                   <td style={{ textAlign: 'right' }}>

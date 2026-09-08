@@ -55,11 +55,11 @@ export default function Coverage() {
       {err && <div className="err">{err}</div>}
 
       <div className="row" style={{ marginBottom: 14 }}>
-        <label style={{ color: 'var(--dim)', fontSize: 12 }}>Cell size</label>
+        <label style={{ color: 'var(--text-dim)', fontSize: 12 }}>Cell size</label>
         <select value={cellKm} onChange={(e) => setCellKm(Number(e.target.value))}>
           {[1, 2, 5, 10].map((v) => <option key={v} value={v}>{v} km</option>)}
         </select>
-        <label style={{ color: 'var(--dim)', fontSize: 12 }}>Camera reach</label>
+        <label style={{ color: 'var(--text-dim)', fontSize: 12 }}>Camera reach</label>
         <select value={reachKm} onChange={(e) => setReachKm(Number(e.target.value))}>
           {[0.5, 1, 1.5, 3, 5].map((v) => <option key={v} value={v}>{v} km</option>)}
         </select>
@@ -85,7 +85,7 @@ export default function Coverage() {
         <div className="card">
           <div className="k">Cameras located</div>
           <div className="v">{s?.cameras_located ?? 0}
-            <span style={{ fontSize: 15, color: 'var(--dim)' }}> / {s?.cameras_total ?? 0}</span>
+            <span style={{ fontSize: 15, color: 'var(--text-dim)' }}> / {s?.cameras_total ?? 0}</span>
           </div>
         </div>
         <div className="card">
@@ -126,7 +126,7 @@ export default function Coverage() {
             ))}
           </MapContainer>
         </div>
-        <div className="row" style={{ marginTop: 10, fontSize: 12, color: 'var(--dim)' }}>
+        <div className="row" style={{ marginTop: 10, fontSize: 12, color: 'var(--text-dim)' }}>
           <span><span style={{ color: '#3fb950' }}>■</span> covered</span>
           <span><span style={{ color: '#f85149' }}>■</span> gap</span>
           <span><span style={{ color: '#4a9eff' }}>●</span> camera</span>

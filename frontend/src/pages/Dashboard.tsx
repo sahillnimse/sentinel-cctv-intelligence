@@ -179,7 +179,7 @@ export default function Dashboard() {
                 </div>
                 <div className="row" style={{ justifyContent: 'space-between', color: 'var(--text-dim)', fontSize: 11, marginTop: 8 }}>
                   <span>{sum.series[0]?.t}</span>
-                  <span className="mono">Peak: {peak} vehicles/min</span>
+                  <span className="mono">Peak: {peak} per {sum.bucket_minutes}m</span>
                   <span>{sum.series[sum.series.length - 1]?.t}</span>
                 </div>
               </>

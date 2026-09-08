@@ -66,7 +66,7 @@ export default function Analytics() {
         <div className="card">
           <div className="k">Cameras online</div>
           <div className="v ok">{sum?.totals.cameras_online ?? 0}
-            <span style={{ fontSize: 15, color: 'var(--dim)' }}> / {sum?.totals.cameras_total ?? 0}</span>
+            <span style={{ fontSize: 15, color: 'var(--text-dim)' }}> / {sum?.totals.cameras_total ?? 0}</span>
           </div>
         </div>
       </div>
@@ -84,8 +84,8 @@ export default function Analytics() {
                 </div>
               ))}
             </div>
-            <div className="row" style={{ justifyContent: 'space-between', marginTop: 8, fontSize: 11, color: 'var(--dim)' }}>
-              <span>{sum.series[0]?.t}</span>
+            <div className="row" style={{ justifyContent: 'space-between', marginTop: 8, fontSize: 11, color: 'var(--text-dim)' }}>
+              <span>{sum.series[0]?.t} · {sum.bucket_minutes}m buckets</span>
               <span>
                 <span style={{ color: 'var(--accent)' }}>■</span> plates read{'  '}
                 <span style={{ color: '#2d4a6b' }}>■</span> vehicles without a plate
@@ -117,7 +117,7 @@ export default function Analytics() {
                  title={`${String(h.hour).padStart(2, '0')}:00 — ${h.count}`} />
           ))}
         </div>
-        <div className="row" style={{ justifyContent: 'space-between', marginTop: 6, fontSize: 11, color: 'var(--dim)' }}>
+        <div className="row" style={{ justifyContent: 'space-between', marginTop: 6, fontSize: 11, color: 'var(--text-dim)' }}>
           <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>23:00</span>
         </div>
       </div>

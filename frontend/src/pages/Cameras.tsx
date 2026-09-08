@@ -151,7 +151,7 @@ export default function Cameras() {
               {field('hls_url', 'HLS URL (fallback)')}
             </div>
             <div className="row" style={{ marginTop: 12 }}>
-              <label className="row" style={{ gap: 6, color: 'var(--dim)', fontSize: 13 }}>
+              <label className="row" style={{ gap: 6, color: 'var(--text-dim)', fontSize: 13 }}>
                 <input type="checkbox" style={{ width: 'auto' }}
                        checked={editing.analytics_enabled ?? true}
                        onChange={(e) => setEditing({ ...editing, analytics_enabled: e.target.checked })} />
@@ -189,11 +189,11 @@ export default function Cameras() {
               <tbody>
                 {shown.map((c) => (
                   <tr key={c.id}>
-                    <td className="mono" style={{ color: 'var(--dim)' }}>{c.external_id || c.id}</td>
+                    <td className="mono" style={{ color: 'var(--text-dim)' }}>{c.external_id || c.id}</td>
                     <td>{c.name}</td>
                     <td>{c.department}</td>
                     <td>{c.camera_type}</td>
-                    <td style={{ color: 'var(--dim)' }}>{c.location_name || '—'}</td>
+                    <td style={{ color: 'var(--text-dim)' }}>{c.location_name || '—'}</td>
                     <td><span className={`pill ${c.status}`}>{c.status}</span></td>
                     <td>
                       {running.has(c.id)

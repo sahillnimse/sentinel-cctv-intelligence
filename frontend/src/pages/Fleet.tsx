@@ -118,10 +118,10 @@ export default function Fleet() {
                              : <span className="pill offline">stopped</span>}
                   </td>
                   <td style={{ textAlign: 'right' }} className="mono">{w.frames_processed}</td>
-                  <td className="mono" style={{ color: 'var(--dim)', fontSize: 11, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <td className="mono" style={{ color: 'var(--text-dim)', fontSize: 11, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {w.source_url || '—'}
                   </td>
-                  <td style={{ color: w.last_error ? 'var(--bad)' : 'var(--dim)', fontSize: 12 }}>
+                  <td style={{ color: w.last_error ? 'var(--bad)' : 'var(--text-dim)', fontSize: 12 }}>
                     {w.last_error || '—'}
                   </td>
                 </tr>

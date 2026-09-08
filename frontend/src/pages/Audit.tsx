@@ -60,7 +60,7 @@ export default function Audit() {
         <div className="row">
           <input placeholder="Filter by user, path or status" value={q} style={{ width: 320 }}
                  onChange={(e) => setQ(e.target.value)} />
-          <span style={{ color: 'var(--dim)', fontSize: 12 }}>{shown.length} shown</span>
+          <span style={{ color: 'var(--text-dim)', fontSize: 12 }}>{shown.length} shown</span>
         </div>
       </div>
 
@@ -74,15 +74,15 @@ export default function Audit() {
             <tbody>
               {shown.map((r) => (
                 <tr key={r.id}>
-                  <td className="mono" style={{ color: 'var(--dim)', whiteSpace: 'nowrap' }}>
+                  <td className="mono" style={{ color: 'var(--text-dim)', whiteSpace: 'nowrap' }}>
                     {new Date(r.ts).toLocaleString()}
                   </td>
-                  <td>{r.username || <span style={{ color: 'var(--dim)' }}>anonymous</span>}</td>
-                  <td style={{ color: 'var(--dim)' }}>{r.role || '—'}</td>
+                  <td>{r.username || <span style={{ color: 'var(--text-dim)' }}>anonymous</span>}</td>
+                  <td style={{ color: 'var(--text-dim)' }}>{r.role || '—'}</td>
                   <td className="mono">{r.action}</td>
                   <td className="mono" style={{ fontSize: 12 }}>{r.target}</td>
                   <td><span className={`pill ${colour(r.status)}`}>{r.status}</span></td>
-                  <td style={{ color: 'var(--dim)', fontSize: 12 }}>{r.detail || '—'}</td>
+                  <td style={{ color: 'var(--text-dim)', fontSize: 12 }}>{r.detail || '—'}</td>
                 </tr>
               ))}
             </tbody>

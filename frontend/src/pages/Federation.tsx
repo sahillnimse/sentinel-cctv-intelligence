@@ -58,9 +58,9 @@ export default function Federation() {
               <tr key={a.key}>
                 <td>
                   <strong>{a.label}</strong>
-                  <div className="mono" style={{ fontSize: 11, color: 'var(--dim)' }}>{a.key}</div>
+                  <div className="mono" style={{ fontSize: 11, color: 'var(--text-dim)' }}>{a.key}</div>
                 </td>
-                <td style={{ color: 'var(--dim)' }}>{a.vendor}</td>
+                <td style={{ color: 'var(--text-dim)' }}>{a.vendor}</td>
                 <td>
                   {a.protocols.map((p) => (
                     <span className="pill unknown" key={p} style={{ marginRight: 4 }}>{p}</span>
@@ -70,7 +70,7 @@ export default function Federation() {
                   {a.configured
                     ? <span className="pill online">ready</span>
                     : <span className="pill unknown">not configured</span>}
-                  <div style={{ fontSize: 11, color: 'var(--dim)', marginTop: 3 }}>{a.detail}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 3 }}>{a.detail}</div>
                 </td>
                 <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                   <button disabled={!a.configured || !!busy}
@@ -113,14 +113,14 @@ export default function Federation() {
                       <td className="mono">{c.external_id}</td>
                       <td>{c.name}</td>
                       <td><span className="pill unknown">{c.camera_type}</span></td>
-                      <td style={{ color: 'var(--dim)' }}>{c.department || '—'}</td>
-                      <td style={{ color: 'var(--dim)', fontSize: 12 }}>{c.vendor || '—'}</td>
+                      <td style={{ color: 'var(--text-dim)' }}>{c.department || '—'}</td>
+                      <td style={{ color: 'var(--text-dim)', fontSize: 12 }}>{c.vendor || '—'}</td>
                       <td>
                         {c.reachable === true ? <span className="pill online">yes</span>
                           : c.reachable === false ? <span className="pill offline">no</span>
                           : <span className="pill unknown">unknown</span>}
                       </td>
-                      <td className="mono" style={{ fontSize: 11, color: 'var(--dim)',
+                      <td className="mono" style={{ fontSize: 11, color: 'var(--text-dim)',
                                                     maxWidth: 320, overflow: 'hidden',
                                                     textOverflow: 'ellipsis' }}>
                         {c.rtsp_url || c.hls_url || '—'}

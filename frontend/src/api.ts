@@ -94,6 +94,8 @@ export type VehicleRow = {
 
 export type Summary = {
   window_minutes: number
+  /** Minutes covered by each point in `series` — not always 1. */
+  bucket_minutes: number
   totals: {
     vehicles: number
     plates: number
