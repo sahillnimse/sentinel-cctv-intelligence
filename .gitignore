@@ -22,3 +22,9 @@ frontend/dist/
 data/samples/*.mp4
 data/samples/*.mkv
 bench/results/*.json
+
+# edge spool (runtime state)
+backend/spool/
+
+# python tooling
+.pytest_cache/

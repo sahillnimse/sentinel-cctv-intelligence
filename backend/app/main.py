@@ -14,8 +14,9 @@ from .config import settings
 from .db import engine
 from .models import Base, Camera
 from .db import SessionLocal
-from .routers import (alerts, analytics, auth, cameras, copilot, demo, evidence,
-                      fleet, sightings, streams, vahan, vehicles, watchlist)
+from .routers import (alerts, analytics, auth, cameras, copilot, demo, edge,
+                      evidence, fleet, sightings, streams, vahan, vehicles,
+                      watchlist)
 
 log = logging.getLogger("sentinel")
 logging.basicConfig(level=logging.INFO)
@@ -110,6 +111,8 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(engine)
     _migrate()
     ws.set_loop(asyncio.get_running_loop())
+    from . import edge as edge_tier
+    edge_tier.start()
     from .agent import plate_llm
     plate_llm.start()
     _retention_prune()
@@ -120,6 +123,8 @@ async def lifespan(app: FastAPI):
         _autostart_workers()
     yield
     stop_all()
+    from . import edge as edge_tier
+    edge_tier.stop()
 
 
 app = FastAPI(title="SENTINEL — Unified CCTV Intelligence Platform", lifespan=lifespan)
@@ -191,7 +196,7 @@ async def rbac_and_audit(request, call_next):
 for r in (auth.router, cameras.router, watchlist.router, sightings.router,
           alerts.router, streams.router, copilot.router, vehicles.router,
           vahan.router, evidence.router, demo.router, fleet.router,
-          analytics.router):
+          analytics.router, edge.router):
     app.include_router(r, prefix="/api")
 
 app.mount("/snapshots", StaticFiles(directory=settings.snapshot_dir), name="snapshots")

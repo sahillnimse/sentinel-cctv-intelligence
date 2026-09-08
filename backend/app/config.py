@@ -36,6 +36,16 @@ class Settings(BaseSettings):
     # session (or looping clips) can't grow the DB unbounded. 0 disables.
     detection_retention_min: int = 240
     go2rtc_url: str = "http://localhost:1984"
+
+    # Edge tier. Off by default: the same codebase runs as the central server
+    # or as a district node depending on these.
+    edge_mode: bool = False
+    edge_node_id: str = "edge-01"
+    edge_central_url: str = ""
+    edge_token: str = ""
+    edge_timeout_s: float = 10.0
+    edge_spool_path: Path = BASE_DIR / "spool" / "edge.db"
+    edge_spool_max_rows: int = 100_000
     snapshot_dir: Path = BASE_DIR / "snapshots"
 
     # Sentinel camera grid (government-provided mock feeds)
@@ -61,3 +71,21 @@ class Settings(BaseSettings):
 
 settings = Settings()
 settings.snapshot_dir.mkdir(parents=True, exist_ok=True)
+
+# HS256 wants at least 32 bytes. A short or left-at-default secret makes every
+# token forgeable, so replace it with a random one and say so loudly. Tokens
+# then don't survive a restart, which is the correct trade for a deployment
+# that hasn't set its own secret.
+_WEAK_SECRETS = {"dev-secret-change-me", "change-me-in-prod", "secret", ""}
+if settings.jwt_secret in _WEAK_SECRETS or len(settings.jwt_secret) < 32:
+    import secrets as _secrets
+    import warnings as _warnings
+
+    _warnings.warn(
+        "JWT_SECRET is weak or unset. Generated an ephemeral one for this "
+        "process; sessions will not survive a restart and multiple workers "
+        "will not share sessions. Set a 32+ character JWT_SECRET in .env "
+        "before deploying.",
+        RuntimeWarning, stacklevel=2,
+    )
+    settings.jwt_secret = _secrets.token_urlsafe(48)
