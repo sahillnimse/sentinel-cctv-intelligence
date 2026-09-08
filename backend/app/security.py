@@ -9,10 +9,12 @@ passes.
 
 Enforcement is middleware rather than per-route dependencies: every mutating
 request to /api is checked in one place, so a new router cannot accidentally
-ship unprotected. Reads stay open when AUTH_ENFORCE_READS is false, which is
-the sandbox default so dashboards work without a login.
+ship unprotected. Reads require a token when AUTH_ENFORCE_READS is true
+(the deployment default). Set it false only for a closed sandbox.
 """
 
+import hashlib
+import hmac
 import json
 import logging
 from datetime import datetime, timedelta
@@ -24,6 +26,8 @@ from .config import settings
 log = logging.getLogger("sentinel.security")
 
 ROLES = ("viewer", "operator", "admin")
+COOKIE_NAME = "sentinel_token"
+_DUMMY_PASSWORD = "sentinel-dummy-password-not-a-real-user"
 
 
 def rank(role: str) -> int:
@@ -47,16 +51,21 @@ def users() -> dict[str, tuple[str, str]]:
     return out
 
 
+def _digest(value: str) -> bytes:
+    return hashlib.sha256(value.encode("utf-8")).digest()
+
+
+def const_eq(left: str, right: str) -> bool:
+    """Length-independent comparison via SHA-256, then a digest compare."""
+    return hmac.compare_digest(_digest(left), _digest(right))
+
+
 def authenticate(username: str, password: str) -> str | None:
     """Return the role on success, None otherwise."""
     entry = users().get(username)
-    if entry is None:
-        return None
-    expected, role = entry
-    # constant-ish time compare; passwords here are short config values
-    if len(password) != len(expected):
-        return None
-    if sum(a != b for a, b in zip(password, expected)):
+    expected, role = entry if entry is not None else (_DUMMY_PASSWORD, "")
+    matched = const_eq(password, expected)
+    if entry is None or not matched:
         return None
     return role
 
@@ -86,12 +95,46 @@ def claims_from_header(header: str | None) -> dict | None:
     return decode_token(header.split(" ", 1)[1].strip())
 
 
+def bearer_secret(header: str | None) -> str | None:
+    if not header or not header.lower().startswith("bearer "):
+        return None
+    token = header.split(" ", 1)[1].strip()
+    return token or None
+
+
+def edge_token_ok(header: str | None) -> bool:
+    """True when the caller presented the shared EDGE_TOKEN (not a JWT)."""
+    expected = settings.edge_token
+    got = bearer_secret(header)
+    if not expected or not got:
+        return False
+    return const_eq(got, expected)
+
+
+def claims_from_request(request) -> dict | None:
+    claims = claims_from_header(request.headers.get("authorization"))
+    if claims is not None:
+        return claims
+    raw = request.cookies.get(COOKIE_NAME)
+    if not raw:
+        return None
+    return decode_token(raw)
+
+
+def is_public(path: str) -> bool:
+    if path == "/api/health" or path.startswith("/api/health/"):
+        return True
+    if path.startswith("/api/auth/login") or path.startswith("/api/auth/logout"):
+        return True
+    return False
+
+
 # --- what each path prefix costs -------------------------------------------
 # Longest matching prefix wins. Anything not listed falls back to OPERATOR for
 # mutations, so a new endpoint is protected by default rather than open.
 
 MUTATION_ROLES = {
-    "/api/auth": None,               # login must be reachable unauthenticated
+    "/api/auth": None,               # login/logout must be reachable unauthenticated
     "/api/cameras": "admin",
     "/api/demo": "admin",
     "/api/streams": "operator",
@@ -103,10 +146,8 @@ MUTATION_ROLES = {
 
 DEFAULT_MUTATION_ROLE = "operator"
 
-# Reads are open by default so the sandbox dashboards work without a login.
-# These are the exceptions: endpoints whose *contents* are sensitive even
-# though reading them changes nothing. The audit trail names every operator
-# who touched the system and records failed logins, so it is not public.
+# Extra minimum roles for sensitive reads, applied even when AUTH_ENFORCE_READS
+# is false. The audit trail names operators and failed logins.
 READ_ROLES = {
     "/api/auth/audit": "admin",
 }
@@ -121,7 +162,7 @@ def required_role(path: str) -> str | None:
 
 
 def required_read_role(path: str) -> str | None:
-    """Minimum role to READ this path, or None when it is public."""
+    """Minimum role to READ this path, or None when the global read policy applies."""
     best, best_len = None, -1
     for prefix, role in READ_ROLES.items():
         if path.startswith(prefix) and len(prefix) > best_len:

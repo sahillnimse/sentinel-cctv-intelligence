@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session, joinedload
 from ..config import settings
 from ..db import get_db
 from ..models import Sighting
+from ..utils.files import snapshot_path
 from ..utils.plates import normalize, plates_match
 
 router = APIRouter(prefix="/evidence", tags=["evidence"])
@@ -41,7 +42,12 @@ def file_sha256(filename: str | None) -> str:
     """
     if not filename:
         return ""
-    path = settings.snapshot_dir / filename
+    # Resolve through the traversal guard rather than joining directly: the
+    # name comes from a database column, and hashing whatever it points at
+    # would let a bad row read files outside the snapshot directory.
+    path = snapshot_path(filename)
+    if path is None:
+        return ""
     try:
         if not path.is_file():
             return ""
@@ -300,7 +306,9 @@ def route_pdf(
     for s in sightings:
         if not s.snapshot:
             continue
-        p = settings.snapshot_dir / s.snapshot
+        p = snapshot_path(s.snapshot)
+        if p is None:
+            continue
         try:
             if p.is_file():
                 thumbs.append((s, p))

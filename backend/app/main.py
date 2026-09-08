@@ -172,30 +172,62 @@ READ_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 @app.middleware("http")
 async def rbac_and_audit(request, call_next):
-    """One gate for every /api call.
+    """One gate for every /api call and for /snapshots.
 
-    Mutations need a token whose role meets the path's requirement. Reads are
-    open unless auth_enforce_reads is set. Every mutation is written to the
-    audit trail with the caller, the outcome and the path.
+    Mutations need a JWT (or the shared EDGE_TOKEN on ingest). Reads need a
+    token when auth_enforce_reads is set. Snapshot files are always gated.
+    Every mutation is written to the audit trail with the caller, the outcome
+    and the path.
     """
     from fastapi.responses import JSONResponse
 
-    from .security import (audit, claims_from_header, rank, required_read_role,
-                           required_role)
+    from .security import (audit, claims_from_request, edge_token_ok, is_public,
+                           rank, required_read_role, required_role)
 
     path = request.url.path
     method = request.method
 
-    if not path.startswith("/api") or path.startswith("/api/auth/login"):
+    if is_public(path) or (not path.startswith("/api") and not path.startswith("/snapshots")):
         return await call_next(request)
 
-    claims = claims_from_header(request.headers.get("authorization"))
+    claims = claims_from_request(request)
+    request.state.claims = claims
+
+    if path.startswith("/snapshots"):
+        if claims is None:
+            return JSONResponse({"detail": "Not authenticated"}, status_code=401)
+        return await call_next(request)
+
     is_read = method in READ_METHODS
+
+    if path.startswith("/api/edge/ingest") and not is_read:
+        if edge_token_ok(request.headers.get("authorization")):
+            claims = {"sub": "edge", "role": "operator"}
+            request.state.claims = claims
+        elif claims is None:
+            return JSONResponse({"detail": "Not authenticated"}, status_code=401)
+        elif rank(claims.get("role", "")) < rank("operator"):
+            db = SessionLocal()
+            try:
+                audit(db, user=claims.get("sub", ""), role=claims.get("role", ""),
+                      action=method, target=path, status=403,
+                      detail={"required_role": "operator"})
+            finally:
+                db.close()
+            return JSONResponse({"detail": "Requires operator role or higher"},
+                                status_code=403)
+        response = await call_next(request)
+        db = SessionLocal()
+        try:
+            audit(db, user=claims.get("sub", ""), role=claims.get("role", ""),
+                  action=method, target=path, status=response.status_code)
+        finally:
+            db.close()
+        return response
 
     if is_read:
         if settings.auth_enforce_reads and claims is None:
             return JSONResponse({"detail": "Not authenticated"}, status_code=401)
-        # Some reads are sensitive regardless of the global read setting.
         need_read = required_read_role(path)
         if need_read is not None:
             if claims is None:

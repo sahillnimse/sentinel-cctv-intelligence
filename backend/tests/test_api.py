@@ -5,25 +5,14 @@ the watchlist, record a sighting, get an alert, trace the vehicle. Plus the
 access-control behaviour, which is easy to regress silently.
 """
 
-import os
-import tempfile
-
 import pytest
-from fastapi.testclient import TestClient
 
 
 @pytest.fixture(scope="module")
-def client():
-    # Point the app at a scratch DB before anything imports settings.
-    tmpdir = tempfile.mkdtemp(prefix="sentinel-test-")
-    os.environ["DATABASE_URL"] = f"sqlite:///{tmpdir}/test.db"
-    os.environ["DEMO_SIMULATE"] = "false"
-    os.environ["AUTOSTART_MAX_CAMERAS"] = "0"
-    os.environ["JWT_SECRET"] = "test-secret-that-is-long-enough-for-hs256-ok"
-
-    from app.main import app
-    with TestClient(app) as c:
-        yield c
+def client(app_client):
+    # Environment and the app instance are owned by conftest; the database is
+    # shared, so assert on rows this module creates rather than global totals.
+    return app_client
 
 
 def token(client, username, password):
@@ -53,8 +42,8 @@ class TestAuth:
                         json={"username": "admin", "password": "nope"})
         assert r.status_code == 401
 
-    def test_me_requires_token(self, client):
-        assert client.get("/api/auth/me").status_code == 401
+    def test_me_requires_token(self, anon):
+        assert anon.get("/api/auth/me").status_code == 401
 
     def test_me_with_token(self, client):
         r = client.get("/api/auth/me", headers=hdr(token(client, "viewer", "viewer123")))
@@ -62,8 +51,8 @@ class TestAuth:
 
 
 class TestAccessControl:
-    def test_mutation_without_token_is_401(self, client):
-        assert client.post("/api/cameras", json={"name": "x"}).status_code == 401
+    def test_mutation_without_token_is_401(self, anon):
+        assert anon.post("/api/cameras", json={"name": "x"}).status_code == 401
 
     def test_viewer_cannot_create_camera(self, client):
         r = client.post("/api/cameras", json={"name": "x"},
@@ -80,8 +69,10 @@ class TestAccessControl:
                         headers=hdr(token(client, "operator", "operator123")))
         assert r.status_code in (200, 201)
 
-    def test_reads_are_open(self, client):
-        assert client.get("/api/cameras").status_code == 200
+    def test_reads_are_open_in_sandbox_mode(self, anon):
+        # AUTH_ENFORCE_READS=false (pinned in conftest): dashboards work
+        # without a login. Genuinely anonymous — no cookie, no header.
+        assert anon.get("/api/cameras").status_code == 200
 
     def test_denials_are_audited(self, client):
         client.post("/api/cameras", json={"name": "x"},
@@ -201,8 +192,8 @@ class TestSensitiveReads:
     """The audit trail names every operator who touched the system and records
     failed logins. Reads are open generally; this one is not."""
 
-    def test_audit_requires_a_token(self, client):
-        assert client.get("/api/auth/audit").status_code == 401
+    def test_audit_requires_a_token(self, anon):
+        assert anon.get("/api/auth/audit").status_code == 401
 
     def test_viewer_cannot_read_audit(self, client):
         r = client.get("/api/auth/audit", headers=hdr(token(client, "viewer", "viewer123")))

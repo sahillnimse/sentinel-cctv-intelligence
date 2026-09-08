@@ -96,3 +96,34 @@ class TestReadRoles:
         for path in ("/api/cameras", "/api/alerts", "/api/analytics/summary",
                      "/api/auth/me", "/api/fleet/health"):
             assert required_read_role(path) is None, path
+
+
+class TestShippedDefaults:
+    """Guard the defaults a clean checkout ships with.
+
+    These are read off the Settings class, not the running instance, so a
+    developer's .env cannot make them look right when they are not.
+    """
+
+    def test_reads_are_enforced_by_default(self):
+        from app.config import Settings
+        assert Settings.model_fields["auth_enforce_reads"].default is True,             "a fresh deployment must require auth for reads"
+
+    def test_token_lifetime_is_bounded(self):
+        from app.config import Settings
+        assert 0 < Settings.model_fields["token_ttl_hours"].default <= 24
+
+    def test_default_passwords_are_flagged_not_silent(self):
+        # config warns when the shipped passwords are still in use; that
+        # warning is the only thing standing between a demo and a deployment.
+        import warnings
+
+        from app.config import Settings
+        assert Settings.model_fields["admin_password"].default == "admin123"
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            import importlib
+
+            import app.config
+            importlib.reload(app.config)
+        assert any("Default role passwords" in str(w.message) for w in caught)

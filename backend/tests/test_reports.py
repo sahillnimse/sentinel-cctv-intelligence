@@ -7,46 +7,48 @@ plates with timestamps. It has to be right, and it has to be openable.
 
 import csv
 import io
-import os
-import tempfile
 from datetime import datetime, timedelta
 
 import pytest
-from fastapi.testclient import TestClient
+
+
+# The database is shared across the suite (see conftest), so this module tags
+# everything it creates and asserts only on its own rows.
+CAM_NAME = "Reports Ring Road"
+CAM_EXT = "rpt01"
+PLATE_A = "RJ07RP1111"
+PLATE_B = "RJ07RP2222"
 
 
 @pytest.fixture(scope="module")
-def client():
-    tmpdir = tempfile.mkdtemp(prefix="sentinel-reports-")
-    os.environ["DATABASE_URL"] = f"sqlite:///{tmpdir}/r.db"
-    os.environ["AUTOSTART_MAX_CAMERAS"] = "0"
-    os.environ["DEMO_SIMULATE"] = "false"
-    os.environ["JWT_SECRET"] = "test-secret-that-is-long-enough-for-hs256-ok"
-
+def client(app_client):
     from app.db import SessionLocal
-    from app.main import app
     from app.models import Camera, Sighting, VehicleDetection
 
-    with TestClient(app) as c:
-        db = SessionLocal()
-        cam = Camera(name="Ring Road", department="Police", external_id="t01",
-                     latitude=23.02, longitude=72.57, location_name="Junction 4",
-                     rtsp_url="rtsp://x/1")
-        db.add(cam)
-        db.commit()
+    db = SessionLocal()
+    cam = Camera(name=CAM_NAME, department="Police", external_id=CAM_EXT,
+                 latitude=23.02, longitude=72.57, location_name="Junction 4",
+                 rtsp_url="rtsp://x/1")
+    db.add(cam)
+    db.commit()
 
-        now = datetime.utcnow()
-        for i, plate in enumerate(["GJ01AB1234", "GJ01AB1234", "MH12XY9999"]):
-            db.add(Sighting(camera_id=cam.id, plate=plate, plate_raw=plate,
-                            confidence=0.9 - i * 0.05,
-                            ts=now - timedelta(minutes=i * 5), snapshot=f"{i}.jpg"))
-        for i in range(5):
-            db.add(VehicleDetection(camera_id=cam.id, vehicle_type="car",
-                                    plate="GJ01AB1234" if i < 2 else "",
-                                    ts=now - timedelta(minutes=i)))
-        db.commit()
-        db.close()
-        yield c
+    now = datetime.utcnow()
+    for i, plate in enumerate([PLATE_A, PLATE_A, PLATE_B]):
+        db.add(Sighting(camera_id=cam.id, plate=plate, plate_raw=plate,
+                        confidence=0.9 - i * 0.05,
+                        ts=now - timedelta(minutes=i * 5), snapshot=f"rpt{i}.jpg"))
+    for i in range(5):
+        db.add(VehicleDetection(camera_id=cam.id, vehicle_type="car",
+                                plate=PLATE_A if i < 2 else "",
+                                ts=now - timedelta(minutes=i)))
+    db.commit()
+    db.close()
+    yield app_client
+
+
+def mine(rows):
+    """Only the rows this module created."""
+    return [r for r in rows if r.get("camera_name") == CAM_NAME]
 
 
 def parse_csv(text_body: str) -> list[dict]:
@@ -57,13 +59,15 @@ class TestDetectionReport:
     def test_summary_totals(self, client):
         d = client.get("/api/reports/detections").json()
         t = d["totals"]
-        assert t["plate_reads"] == 3
-        assert t["distinct_plates"] == 2
-        assert t["vehicle_detections"] == 5
+        plates = {p["plate"] for p in d["plates"]}
+        assert {PLATE_A, PLATE_B} <= plates
+        assert t["plate_reads"] >= 3
+        assert t["vehicle_detections"] >= 5
+        assert t["distinct_plates"] == len(d["plates"])
 
     def test_plates_carry_first_and_last_seen(self, client):
         d = client.get("/api/reports/detections").json()
-        entry = next(p for p in d["plates"] if p["plate"] == "GJ01AB1234")
+        entry = next(p for p in d["plates"] if p["plate"] == PLATE_A)
         assert entry["reads"] == 2
         assert entry["first_seen"] <= entry["last_seen"]
 
@@ -86,7 +90,8 @@ class TestCsvExports:
         assert "attachment" in r.headers["content-disposition"]
 
         rows = parse_csv(r.text)
-        assert len(rows) == 3
+        ours = mine(rows)
+        assert len(ours) == 3
         # The deliverable is "detected vehicles and plates with timestamps".
         for column in ("timestamp_utc", "plate", "camera_name", "confidence"):
             assert column in rows[0], f"missing {column}"
@@ -94,17 +99,17 @@ class TestCsvExports:
         assert all(row["plate"] for row in rows)
 
     def test_detections_csv_resolves_camera_metadata(self, client):
-        rows = parse_csv(client.get("/api/reports/detections.csv").text)
-        assert rows[0]["camera_name"] == "Ring Road"
-        assert rows[0]["department"] == "Police"
-        assert rows[0]["location"] == "Junction 4"
+        row = mine(parse_csv(client.get("/api/reports/detections.csv").text))[0]
+        assert row["camera_name"] == CAM_NAME
+        assert row["department"] == "Police"
+        assert row["location"] == "Junction 4"
 
     def test_vehicles_csv_includes_unreadable_plates(self, client):
-        rows = parse_csv(client.get("/api/reports/vehicles.csv").text)
-        assert len(rows) == 5
+        ours = mine(parse_csv(client.get("/api/reports/vehicles.csv").text))
+        assert len(ours) == 5
         # The denominator matters: an evaluator checking plate yield needs the
         # vehicles whose plate could not be read.
-        assert any(row["plate"] == "" for row in rows)
+        assert any(row["plate"] == "" for row in ours)
 
     def test_plates_only_filter(self, client):
         rows = parse_csv(client.get("/api/reports/detections.csv?plates_only=true").text)
@@ -112,17 +117,17 @@ class TestCsvExports:
 
     def test_registry_csv_round_trips_the_import_shape(self, client):
         rows = parse_csv(client.get("/api/reports/registry.csv").text)
-        assert len(rows) == 1
+        assert rows
         for column in ("external_id", "name", "department", "latitude",
                        "longitude", "rtsp_url"):
             assert column in rows[0], f"missing {column}"
-        assert rows[0]["name"] == "Ring Road"
+        assert any(r["name"] == CAM_NAME and r["external_id"] == CAM_EXT
+                   for r in rows)
 
     def test_empty_window_still_returns_a_valid_file(self, client):
         r = client.get("/api/reports/detections.csv?since=2099-01-01T00:00:00")
         assert r.status_code == 200
-        rows = parse_csv(r.text)
-        assert rows == []          # header only, not an error
+        assert parse_csv(r.text) == []      # header only, not an error
 
 
 class TestOps:

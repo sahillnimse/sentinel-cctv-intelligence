@@ -21,9 +21,9 @@ class Settings(BaseSettings):
     viewer_username: str = "viewer"
     viewer_password: str = "viewer123"
     token_ttl_hours: int = 12
-    # Mutating /api calls always require a token. Reads are open by default so
-    # the sandbox dashboards work without a login; set true to lock them too.
-    auth_enforce_reads: bool = False
+    # Mutating /api calls always require a token. Reads also require a token
+    # unless this is set false (closed-network sandbox only).
+    auth_enforce_reads: bool = True
     sample_interval_ms: int = 400
     min_plate_confidence: float = 0.5
     # boot: how many cameras auto-start, and the delay between each starting
@@ -84,6 +84,15 @@ class Settings(BaseSettings):
 
 settings = Settings()
 settings.snapshot_dir.mkdir(parents=True, exist_ok=True)
+
+_DEFAULT_PASSWORDS = {"admin123", "operator123", "viewer123"}
+if {settings.admin_password, settings.operator_password, settings.viewer_password} & _DEFAULT_PASSWORDS:
+    import warnings as _pw_warnings
+    _pw_warnings.warn(
+        "Default role passwords are still in use. Change ADMIN_PASSWORD / "
+        "OPERATOR_PASSWORD / VIEWER_PASSWORD before any networked deployment.",
+        RuntimeWarning, stacklevel=2,
+    )
 
 # HS256 wants at least 32 bytes. A short or left-at-default secret makes every
 # token forgeable, so replace it with a random one and say so loudly. Tokens
