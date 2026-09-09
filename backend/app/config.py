@@ -70,6 +70,12 @@ class Settings(BaseSettings):
     # cctv.corp8.cloud in a browser, paste the session cookie here to let
     # sync-grid read the live catalogue; RTSP needs no auth.
     grid_access_cookie: str = ""
+    # Grid media auth (per the integrator guide): RTSP & WHEP authenticate
+    # with your registered email + access password embedded in the URL
+    # (rtsp://email:password@host...). Only approved-list emails connect.
+    # HLS goes over the CDN host with the same access password.
+    grid_email: str = ""
+    grid_password: str = ""
 
     # Agentic copilot via OpenRouter (OpenAI-compatible). Set the key in .env
     # to activate; the UI shows a setup hint until then.

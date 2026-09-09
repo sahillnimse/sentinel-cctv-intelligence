@@ -124,7 +124,7 @@ export default function Federation() {
                       <td className="mono" style={{ fontSize: 11, color: 'var(--text-dim)',
                                                     maxWidth: 320, overflow: 'hidden',
                                                     textOverflow: 'ellipsis' }}>
-                        {c.rtsp_url || c.hls_url || '—'}
+                        {(c.rtsp_url || c.hls_url || '—').replace(/:\/\/([^@]+)@/, '://***@')}
                       </td>
                     </tr>
                   ))}

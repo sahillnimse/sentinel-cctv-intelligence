@@ -147,10 +147,11 @@ def sync_grid(db: Session = Depends(get_db)):
         items = [{"id": f"cam{i:02d}"} for i in range(1, 31)]
 
     created = updated = 0
+    from ..adapters.sentinel_grid import grid_hls_url, grid_rtsp_url
     for idx, it in enumerate(items):
         cid = str(it["id"])
-        rtsp = f"{settings.grid_rtsp_base}/{cid}"
-        hls = f"{settings.grid_hls_base}/live/stream/{cid}/index.m3u8"
+        rtsp = grid_rtsp_url(cid)
+        hls = grid_hls_url(cid)
         cam = db.query(Camera).filter(Camera.external_id == cid).first()
         if cam is None:
             # Spread unknown positions around Ahmedabad so the GIS map is usable;

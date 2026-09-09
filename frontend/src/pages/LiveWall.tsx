@@ -238,7 +238,7 @@ export default function LiveWall() {
                 <span className={`pill ${focus.status}`}>{focus.status}</span>
                 <span className="pill unknown">{focus.camera_type}</span>
                 <span className="mono" style={{ fontSize: 12, color: 'var(--text-dim)' }}>
-                  RTSP: {focus.rtsp_url || 'N/A'}
+                  RTSP: {(focus.rtsp_url || 'N/A').replace(/:\/\/([^@]+)@/, '://***@')}
                 </span>
               </div>
               <Link to={`/detections?camera_id=${focus.id}`}>

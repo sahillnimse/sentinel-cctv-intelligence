@@ -35,6 +35,10 @@ wheels/
 .coverage.*
 htmlcov/
 .oxlint_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+*.tsbuildinfo
 
 # --- Environment, Secrets & Local Configuration ------------------------------
 .env
@@ -43,6 +47,21 @@ htmlcov/
 backend/.env
 backend/.env.*
 !backend/.env.example
+# Private keys, certificates with keys, and credential files. The grid
+# email/password live in backend/.env (above); never commit them elsewhere.
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+credentials.json
+secrets.json
+service-account*.json
+*-service-account.json
+*.token
+cookies.txt
+*cookie*.txt
 
 # --- Local Databases & Runtime State -----------------------------------------
 *.db
@@ -73,13 +92,30 @@ backend/models/*.pt
 backend/models/*.pth
 
 # --- Local Video Footage & Benchmark Datasets --------------------------------
+# Sample footage stays local (evaluators mount their own); result JSONs embed
+# timestamps/hostnames from the operator's machine.
 data/samples/*.mp4
 data/samples/*.mkv
 data/samples/*.avi
 data/samples/*.mov
 data/samples/*.webm
+*.mp4
+*.mkv
+*.avi
+*.mov
+*.webm
+recordings/
+footage/
+videos/
+captures/
 bench/results/*.json
 bench/results/*.csv
+
+# --- Logs --------------------------------------------------------------------
+*.log
+logs/
+backend/logs/
+frontend/logs/
 
 # --- Node & Frontend Build Artifacts -----------------------------------------
 node_modules/
