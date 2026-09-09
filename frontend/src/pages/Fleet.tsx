@@ -1,16 +1,17 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
+import { ErrorBanner } from '../components/Notice'
 import type { FleetHealth, WorkerStatus } from '../api'
 
 export default function Fleet() {
   const [fleet, setFleet] = useState<FleetHealth | null>(null)
   const [workers, setWorkers] = useState<WorkerStatus | null>(null)
-  const [err, setErr] = useState('')
+  const [err, setErr] = useState<unknown>(null)
 
   useEffect(() => {
     const load = () => Promise.all([api.fleetHealth(), api.workers()])
-      .then(([f, w]) => { setFleet(f); setWorkers(w); setErr('') })
-      .catch((e) => setErr(e.message ?? String(e)))
+      .then(([f, w]) => { setFleet(f); setWorkers(w); setErr(null) })
+      .catch((e) => setErr(e))
     load()
     const t = setInterval(load, 8000)
     return () => clearInterval(t)
@@ -25,7 +26,7 @@ export default function Fleet() {
       <div className="sub">
         Network operations view · generated {fleet ? new Date(fleet.generated_at).toLocaleTimeString() : '—'}
       </div>
-      {err && <div className="err">{err}</div>}
+      <ErrorBanner error={err} />
 
       <div className="cards">
         <div className="card">

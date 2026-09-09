@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api, can } from '../api'
+import { ErrorBanner } from '../components/Notice'
 import type { WatchlistEntry } from '../api'
 
 const REASONS = ['stolen', 'wanted', 'blacklisted', 'missing']
@@ -9,13 +10,13 @@ export default function Watchlist() {
   const [plate, setPlate] = useState('')
   const [label, setLabel] = useState('')
   const [reason, setReason] = useState('stolen')
-  const [err, setErr] = useState('')
+  const [err, setErr] = useState<unknown>(null)
 
   // Editing the watchlist is an operator action. The server enforces it; the
   // UI hides the controls so a viewer isn't offered buttons that only 403.
   const canEdit = can('operator')
 
-  const load = () => api.watchlist().then(setRows).catch((e) => setErr(String(e.message ?? e)))
+  const load = () => api.watchlist().then(setRows).catch((e) => setErr(e))
   useEffect(() => { load() }, [])
 
   const add = async (e: React.FormEvent) => {
@@ -26,10 +27,10 @@ export default function Watchlist() {
       await api.addWatch({ plate: p, label: label.trim(), reason })
       setPlate('')
       setLabel('')
-      setErr('')
+      setErr(null)
       load()
     } catch (e: any) {
-      setErr(String(e.message ?? e))
+      setErr(e)
     }
   }
 
@@ -44,7 +45,7 @@ export default function Watchlist() {
       <div className="sub">
         {rows.filter((r) => r.active).length} active entries · matched continuously against every plate read
       </div>
-      {err && <div className="err">{err}</div>}
+      <ErrorBanner error={err} />
 
       {canEdit && (
       <div className="panel">

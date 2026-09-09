@@ -72,7 +72,7 @@ const SECTIONS: { title: string; items: Item[] }[] = [
 ]
 
 export default function App() {
-  const [role, setRole] = useState<Role | null>(auth.role())
+  const [role, setRole] = useState<Role | null>(() => auth.role())
   const [unacked, setUnacked] = useState(0)
   const [toast, setToast] = useState<string | null>(null)
   const [timeStr, setTimeStr] = useState('')
@@ -141,11 +141,10 @@ export default function App() {
         {SECTIONS.map((section) => (
           <div className="nav-group" key={section.title}>
             <div className="nav-title">{section.title}</div>
-            {section.items
-              .filter((i) => !i.need || can(i.need))
-              .map((i) => {
+            {section.items.reduce<React.ReactNode[]>((acc, i) => {
+              if (!i.need || can(i.need)) {
                 const Icon = i.icon
-                return (
+                acc.push(
                   <NavLink
                     key={i.to}
                     to={i.to}
@@ -157,7 +156,9 @@ export default function App() {
                     {i.to === '/alerts' && unacked > 0 && <span className="badge">{unacked}</span>}
                   </NavLink>
                 )
-              })}
+              }
+              return acc
+            }, [])}
           </div>
         ))}
 

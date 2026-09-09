@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { MapContainer, Rectangle, TileLayer, CircleMarker, Tooltip } from 'react-leaflet'
 import { api } from '../api'
+import { ErrorBanner } from '../components/Notice'
 import type { Camera, GapAnalysis } from '../api'
 
 // Model 1 deliverable: the gap-analysis report. Grid the bounding box of the
@@ -13,13 +14,13 @@ export default function Coverage() {
   const [data, setData] = useState<GapAnalysis | null>(null)
   const [cams, setCams] = useState<Camera[]>([])
   const [loading, setLoading] = useState(false)
-  const [err, setErr] = useState('')
+  const [err, setErr] = useState<unknown>(null)
 
   const load = useCallback(() => {
     setLoading(true)
     Promise.all([api.gapAnalysis(cellKm, reachKm), api.cameras()])
-      .then(([g, c]) => { setData(g); setCams(c); setErr('') })
-      .catch((e) => setErr(e.message ?? String(e)))
+      .then(([g, c]) => { setData(g); setCams(c); setErr(null) })
+      .catch((e) => setErr(e))
       .finally(() => setLoading(false))
   }, [cellKm, reachKm])
 
@@ -52,7 +53,7 @@ export default function Coverage() {
       <div className="sub">
         Where the network is blind, so new camera budget goes where it is measurably needed
       </div>
-      {err && <div className="err">{err}</div>}
+      <ErrorBanner error={err} />
 
       <div className="row" style={{ marginBottom: 14 }}>
         <label style={{ color: 'var(--text-dim)', fontSize: 12 }}>Cell size</label>
@@ -103,9 +104,9 @@ export default function Coverage() {
             <TileLayer
               url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
               attribution="&copy; OpenStreetMap &copy; CARTO" />
-            {(data?.cells ?? []).map((c, i) => (
+            {(data?.cells ?? []).map((c) => (
               <Rectangle
-                key={i}
+                key={`${c.lat}:${c.lng}`}
                 bounds={[[c.lat - c.lat_step / 2, c.lng - c.lng_step / 2],
                          [c.lat + c.lat_step / 2, c.lng + c.lng_step / 2]]}
                 pathOptions={{

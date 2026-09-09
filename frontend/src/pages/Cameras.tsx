@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, can } from '../api'
+import { ErrorBanner } from '../components/Notice'
 import type { Camera, CameraIn, WorkerStatus } from '../api'
 import MapView from '../components/MapView'
 import type { Pin } from '../components/MapView'
@@ -24,13 +25,13 @@ export default function Cameras() {
   const [dept, setDept] = useState('all')
   const [q, setQ] = useState('')
   const [busy, setBusy] = useState('')
-  const [err, setErr] = useState('')
+  const [err, setErr] = useState<unknown>(null)
   const [note, setNote] = useState('')
   const [editing, setEditing] = useState<Partial<Camera> | null>(null)
 
   const load = () => Promise.all([api.cameras(), api.workers()])
-    .then(([c, w]) => { setCams(c); setWorkers(w); setErr('') })
-    .catch((e) => setErr(e.message ?? String(e)))
+    .then(([c, w]) => { setCams(c); setWorkers(w); setErr(null) })
+    .catch((e) => setErr(e))
 
   useEffect(() => { load(); const t = setInterval(load, 12000); return () => clearInterval(t) }, [])
 
@@ -44,23 +45,35 @@ export default function Cameras() {
     return `${c.name} ${c.external_id} ${c.location_name} ${c.department}`.toLowerCase().includes(needle)
   })
 
-  const pins: Pin[] = shown
-    .filter((c) => c.latitude && c.longitude)
-    .map((c) => ({
-      id: c.id, lat: c.latitude, lng: c.longitude, label: c.name,
-      sub: `${c.department} · ${c.status}${c.location_name ? ' · ' + c.location_name : ''}`,
-      colour: STATUS_COLOUR[c.status] ?? STATUS_COLOUR.unknown,
-    }))
+  const pins: Pin[] = shown.reduce<Pin[]>((acc, c) => {
+    if (c.latitude && c.longitude) {
+      acc.push({
+        id: c.id, lat: c.latitude, lng: c.longitude, label: c.name,
+        sub: `${c.department} · ${c.status}${c.location_name ? ' · ' + c.location_name : ''}`,
+        colour: STATUS_COLOUR[c.status] ?? STATUS_COLOUR.unknown,
+      })
+    }
+    return acc
+  }, [])
 
-  const running = new Set(workers?.workers.filter((w) => w.alive).map((w) => w.camera_id) ?? [])
+  const running = new Set(workers?.workers.reduce<number[]>((acc, w) => {
+    if (w.alive) acc.push(w.camera_id)
+    return acc
+  }, []) ?? [])
 
   const act = async (label: string, fn: () => Promise<unknown>, msg?: (r: any) => string) => {
-    setBusy(label); setNote(''); setErr('')
+    setBusy(label)
+    setErr(null)
+    setNote('')
     try {
-      const r: any = await fn()
-      if (msg) setNote(msg(r))
+      const res = await fn()
+      setNote(msg ? msg(res) : `${label} completed`)
       await load()
-    } catch (e: any) { setErr(e.message ?? String(e)) } finally { setBusy('') }
+    } catch (e) {
+      setErr(e)
+    } finally {
+      setBusy('')
+    }
   }
 
   const save = async (e: React.FormEvent) => {
@@ -72,13 +85,20 @@ export default function Cameras() {
     setEditing(null)
   }
 
+  const parseNum = (v: string) => {
+    const trimmed = v.trim()
+    if (!trimmed) return 0
+    const n = Number(trimmed)
+    return Number.isNaN(n) ? 0 : n
+  }
+
   const field = (k: keyof CameraIn, label: string, type = 'text') => (
     <label className="field">
       <span>{label}</span>
       <input type={type} value={String((editing as any)?.[k] ?? '')}
              onChange={(e) => setEditing({
                ...editing,
-               [k]: type === 'number' ? Number(e.target.value) : e.target.value,
+               [k]: type === 'number' ? parseNum(e.target.value) : e.target.value,
              })} />
     </label>
   )
@@ -90,7 +110,7 @@ export default function Cameras() {
         {cams.length} onboarded · {cams.filter((c) => c.status === 'online').length} online ·
         {' '}{running.size} running analytics
       </div>
-      {err && <div className="err">{err}</div>}
+      <ErrorBanner error={err} />
       {note && <div className="note">{note}</div>}
 
       <div className="row" style={{ marginBottom: 14 }}>

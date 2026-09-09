@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, can, snapshotUrl } from '../api'
+import { ErrorBanner } from '../components/Notice'
 import type { Camera, WorkerStatus } from '../api'
 import {
   ActivityIcon,
-  AlertTriangleIcon,
   CameraIcon,
   SearchIcon,
 } from '../components/Icons'
@@ -19,13 +19,13 @@ export default function LiveWall() {
   const [q, setQ] = useState('')
   const [onlyRunning, setOnlyRunning] = useState(false)
   const [focus, setFocus] = useState<Camera | null>(null)
-  const [err, setErr] = useState('')
+  const [err, setErr] = useState<unknown>(null)
   const [togglingId, setTogglingId] = useState<number | null>(null)
 
   const load = () =>
     Promise.all([api.cameras(), api.workers()])
-      .then(([c, w]) => { setCams(c); setWorkers(w); setErr('') })
-      .catch((e) => setErr(e.message ?? String(e)))
+      .then(([c, w]) => { setCams(c); setWorkers(w); setErr(null) })
+      .catch((e) => setErr(e))
 
   useEffect(() => {
     load()
@@ -64,7 +64,7 @@ export default function LiveWall() {
       }
       await load()
     } catch (e: any) {
-      setErr(e.message ?? String(e))
+      setErr(e)
     } finally {
       setTogglingId(null)
     }
@@ -84,7 +84,7 @@ export default function LiveWall() {
           {can('operator') && (
             <button
               className="primary"
-              onClick={() => api.startAll().then(load).catch((e) => setErr(e.message))}
+              onClick={() => api.startAll().then(load).catch((e) => setErr(e))}
             >
               <ActivityIcon size={14} />
               Start All Decoders
@@ -93,7 +93,7 @@ export default function LiveWall() {
         </div>
       </div>
 
-      {err && <div className="err"><AlertTriangleIcon size={16} />{err}</div>}
+      <ErrorBanner error={err} />
 
       <div className="panel" style={{ padding: '12px 18px', marginBottom: 16 }}>
         <div className="row">

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
+import { ErrorBanner } from '../components/Notice'
 import type { Camera, VehicleRow } from '../api'
-import { AlertTriangleIcon, CarIcon, RefreshCwIcon } from '../components/Icons'
+import { CarIcon, RefreshCwIcon } from '../components/Icons'
 
 const TYPES = ['', 'car', 'motorcycle', 'bus', 'truck']
 
@@ -13,7 +14,7 @@ export default function Detections() {
   const [vType, setVType] = useState('')
   const [platesOnly, setPlatesOnly] = useState(false)
   const [minutes, setMinutes] = useState(60)
-  const [err, setErr] = useState('')
+  const [err, setErr] = useState<unknown>(null)
 
   const camName = useMemo(() => {
     const m = new Map(cams.map((c) => [c.id, c.name]))
@@ -29,7 +30,7 @@ export default function Detections() {
       camera_id: cameraId === '' ? undefined : cameraId,
       vehicle_type: vType || undefined,
       with_plate: platesOnly ? true : undefined,
-    }).then(setRows).catch((e) => setErr(e.message ?? String(e)))
+    }).then(setRows).catch((e) => setErr(e))
   }, [cameraId, vType, platesOnly, minutes])
 
   useEffect(() => {
@@ -56,7 +57,7 @@ export default function Detections() {
         </button>
       </div>
 
-      {err && <div className="err"><AlertTriangleIcon size={16} />{err}</div>}
+      <ErrorBanner error={err} />
 
       <div className="panel" style={{ padding: '12px 18px', marginBottom: 16 }}>
         <div className="row">

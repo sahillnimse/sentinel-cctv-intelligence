@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../api'
+import { ErrorBanner } from '../components/Notice'
 import type { TraceResult } from '../api'
 import MapView from '../components/MapView'
 import type { Pin } from '../components/MapView'
@@ -22,23 +23,23 @@ const SAMPLE_PLATES = [
 
 export default function Trace() {
   const [params, setParams] = useSearchParams()
-  const [plate, setPlate] = useState(params.get('plate') ?? '')
+  const [plate, setPlate] = useState(() => params.get('plate') ?? '')
   const [res, setRes] = useState<TraceResult | null>(null)
   const [loading, setLoading] = useState(false)
-  const [err, setErr] = useState('')
+  const [err, setErr] = useState<unknown>(null)
   const [seeding, setSeeding] = useState(false)
 
   const run = useCallback(async (raw: string) => {
     const p = raw.trim().toUpperCase().replace(/\s+/g, '')
     if (!p) return
     setLoading(true)
-    setErr('')
+    setErr(null)
     setRes(null)
     try {
       const data = await api.trace(p)
       setRes(data)
     } catch (e: any) {
-      setErr(String(e.message ?? e))
+      setErr(e)
     } finally {
       setLoading(false)
     }
@@ -64,13 +65,13 @@ export default function Trace() {
 
   const handleSeedAndTrace = async () => {
     setSeeding(true)
-    setErr('')
+    setErr(null)
     try {
       await api.seedDemo('GJ01AB1234', 6)
       setPlate('GJ01AB1234')
       setParams({ plate: 'GJ01AB1234' })
     } catch (e: any) {
-      setErr(e.message ?? String(e))
+      setErr(e)
     } finally {
       setSeeding(false)
     }
@@ -161,7 +162,7 @@ export default function Trace() {
         </form>
       </div>
 
-      {err && <div className="err"><AlertTriangleIcon size={16} />{err}</div>}
+      <ErrorBanner error={err} />
 
       {res && route.length === 0 && (
         <div className="panel">

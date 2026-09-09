@@ -203,16 +203,16 @@ export type AuditRow = {
   detail: string
 }
 
-// --- auth token, kept in localStorage so a refresh doesn't log you out -----
+// --- session state (non-sensitive display metadata in localStorage,
+// auth credential kept in memory and server-set HttpOnly cookie) ----------
 
-const TOKEN_KEY = 'sentinel.token'
+let inMemoryToken: string | null = null
+
 const ROLE_KEY = 'sentinel.role'
 const USER_KEY = 'sentinel.user'
 
 export const auth = {
-  token: () => {
-    try { return localStorage.getItem(TOKEN_KEY) } catch { return null }
-  },
+  token: () => inMemoryToken,
   role: (): Role | null => {
     try { return localStorage.getItem(ROLE_KEY) as Role | null } catch { return null }
   },
@@ -220,15 +220,15 @@ export const auth = {
     try { return localStorage.getItem(USER_KEY) } catch { return null }
   },
   set(token: string, role: Role, username: string) {
+    inMemoryToken = token
     try {
-      localStorage.setItem(TOKEN_KEY, token)
       localStorage.setItem(ROLE_KEY, role)
       localStorage.setItem(USER_KEY, username)
     } catch { /* private mode — session-only login */ }
   },
   clear() {
+    inMemoryToken = null
     try {
-      localStorage.removeItem(TOKEN_KEY)
       localStorage.removeItem(ROLE_KEY)
       localStorage.removeItem(USER_KEY)
     } catch { /* nothing to clear */ }
@@ -242,39 +242,120 @@ export function can(need: Role): boolean {
   return r != null && RANK[r] >= RANK[need]
 }
 
+export const ROLE_LABEL: Record<Role, string> = {
+  viewer: 'Viewer',
+  operator: 'Operator',
+  admin: 'Administrator',
+}
+
+/** What a role is actually allowed to do, for explaining a refusal. */
+export const ROLE_SCOPE: Record<Role, string> = {
+  viewer: 'view dashboards, search and export',
+  operator: 'acknowledge alerts, control analytics and edit the watchlist',
+  admin: 'change the camera registry and onboard systems',
+}
+
+export type ErrorKind = 'permission' | 'signin' | 'notfound' | 'server' | 'network'
+
 export class ApiError extends Error {
   status: number
-  constructor(status: number, message: string) {
+  kind: ErrorKind
+  /** Minimum role the server asked for, when it told us. */
+  requiredRole?: Role
+
+  constructor(status: number, message: string, kind: ErrorKind, requiredRole?: Role) {
     super(message)
     this.status = status
+    this.kind = kind
+    this.requiredRole = requiredRole
   }
+
+  /** True when this is a policy refusal rather than something going wrong. */
+  get isAccess() {
+    return this.kind === 'permission' || this.kind === 'signin'
+  }
+}
+
+// The server answers a refusal with "Requires operator role or higher". That
+// is accurate and unhelpful to read in a red box, so turn it into a sentence
+// that names who you are and what that role can do.
+const REQUIRED_ROLE_RE = /requires\s+(viewer|operator|admin)\s+role/i
+
+function permissionMessage(detail: string): [string, Role | undefined] {
+  const match = REQUIRED_ROLE_RE.exec(detail)
+  const need = (match?.[1] as Role | undefined)
+  const role = auth.role()
+
+  if (!role) {
+    return [need
+      ? `You are not signed in. This needs ${ROLE_LABEL[need]} access or higher.`
+      : 'You are not signed in, so this action is not available.', need]
+  }
+  if (need) {
+    return [`Signed in as ${ROLE_LABEL[role]}, which can ${ROLE_SCOPE[role]}. ` +
+            `This action needs ${ROLE_LABEL[need]} access or higher.`, need]
+  }
+  return [`Signed in as ${ROLE_LABEL[role]}, which does not have permission ` +
+          'for this action.', undefined]
 }
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const token = auth.token()
-  const res = await fetch(path, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(init?.headers ?? {}),
-    },
-  })
-  if (res.status === 401 && path !== '/api/auth/login') {
-    auth.clear()
-    throw new ApiError(401, 'Session expired — sign in again')
+  let res: Response
+  try {
+    res = await fetch(path, {
+      credentials: 'same-origin',
+      ...init,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(init?.headers ?? {}),
+      },
+    })
+  } catch {
+    throw new ApiError(0, 'Cannot reach the server. Check that the backend is running.',
+                       'network')
   }
+
+  if (res.status === 401 && path !== '/api/auth/login') {
+    const wasSignedIn = auth.role() != null
+    auth.clear()
+    throw new ApiError(401, wasSignedIn
+      ? 'Your session has expired. Sign in again to continue.'
+      : 'You are not signed in. Sign in to continue.', 'signin')
+  }
+
   if (!res.ok) {
     let detail = `${res.status} ${res.statusText}`
     try {
       const body = await res.json()
-      if (body?.detail) detail = typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail)
+      if (body?.detail) {
+        detail = typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail)
+      }
     } catch { /* non-JSON error body */ }
-    throw new ApiError(res.status, detail)
+
+    if (res.status === 403) {
+      const [message, need] = permissionMessage(detail)
+      throw new ApiError(403, message, 'permission', need)
+    }
+    if (res.status === 404) throw new ApiError(404, detail, 'notfound')
+    throw new ApiError(res.status, detail, 'server')
   }
+
   if (res.status === 204) return undefined as T
   const text = await res.text()
   return text ? JSON.parse(text) : (undefined as T)
+}
+
+/** Message for any thrown value, so pages never render "[object Object]". */
+export function errorMessage(e: unknown): string {
+  if (e instanceof ApiError) return e.message
+  if (e instanceof Error) return e.message
+  return String(e)
+}
+
+export function isAccessError(e: unknown): boolean {
+  return e instanceof ApiError && e.isAccess
 }
 
 export const api = {
@@ -283,6 +364,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ username, password }),
     }),
+  logout: () => req<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }),
   me: () => req<{ username: string; role: Role; exp: number }>('/api/auth/me'),
   audit: (limit = 200) => req<AuditRow[]>(`/api/auth/audit?limit=${limit}`),
 

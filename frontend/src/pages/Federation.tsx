@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api, can } from '../api'
+import { ErrorBanner } from '../components/Notice'
 import type { AdapterInfo, DiscoveredCamera } from '../api'
 
 // Model 3: the middleware layer. Each adapter speaks one departmental
@@ -12,27 +13,27 @@ export default function Federation() {
   const [found, setFound] = useState<DiscoveredCamera[]>([])
   const [busy, setBusy] = useState('')
   const [note, setNote] = useState('')
-  const [err, setErr] = useState('')
+  const [err, setErr] = useState<unknown>(null)
 
-  const load = () => api.adapters().then(setRows).catch((e) => setErr(e.message ?? String(e)))
+  const load = () => api.adapters().then(setRows).catch((e) => setErr(e))
   useEffect(() => { load() }, [])
 
   const discover = async (key: string, probe: boolean) => {
-    setBusy(key); setErr(''); setNote(''); setOpen(key)
+    setBusy(key); setErr(null); setNote(''); setOpen(key)
     try {
       const r = await api.discoverAdapter(key, probe)
       setFound(r.cameras)
       setNote(`${r.count} camera${r.count === 1 ? '' : 's'} discovered via ${key}`)
-    } catch (e: any) { setErr(e.message ?? String(e)); setFound([]) } finally { setBusy('') }
+    } catch (e: any) { setErr(e); setFound([]) } finally { setBusy('') }
   }
 
   const onboard = async (key: string) => {
-    setBusy(key); setErr(''); setNote('')
+    setBusy(key); setErr(null); setNote('')
     try {
       const r = await api.onboardAdapter(key)
       setNote(`${key}: ${r.created} created, ${r.updated} updated from ${r.discovered} discovered`)
       await load()
-    } catch (e: any) { setErr(e.message ?? String(e)) } finally { setBusy('') }
+    } catch (e: any) { setErr(e) } finally { setBusy('') }
   }
 
   const configured = rows.filter((r) => r.configured).length
@@ -44,7 +45,7 @@ export default function Federation() {
         {configured} of {rows.length} adapters configured · each speaks one departmental
         system and returns the same shape
       </div>
-      {err && <div className="err">{err}</div>}
+      <ErrorBanner error={err} />
       {note && <div className="note">{note}</div>}
 
       <div className="panel">

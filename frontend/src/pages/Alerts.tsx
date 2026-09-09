@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, can } from '../api'
+import { ErrorBanner } from '../components/Notice'
 import type { Alert } from '../api'
 import {
-  AlertTriangleIcon,
   CheckCircleIcon,
   RefreshCwIcon,
 } from '../components/Icons'
@@ -11,13 +11,13 @@ import {
 export default function Alerts({ onSeen }: { onSeen?: () => void }) {
   const [rows, setRows] = useState<Alert[]>([])
   const [filter, setFilter] = useState<'all' | 'open' | 'acked'>('all')
-  const [err, setErr] = useState('')
+  const [err, setErr] = useState<unknown>(null)
   const [ackingId, setAckingId] = useState<number | null>(null)
 
   const load = () =>
     api.alerts()
       .then(setRows)
-      .catch((e) => setErr(String(e.message ?? e)))
+      .catch((e) => setErr(e))
 
   useEffect(() => {
     load()
@@ -32,7 +32,7 @@ export default function Alerts({ onSeen }: { onSeen?: () => void }) {
       await api.ackAlert(id)
       await load()
     } catch (e: any) {
-      setErr(e.message ?? String(e))
+      setErr(e)
     } finally {
       setAckingId(null)
     }
@@ -63,7 +63,7 @@ export default function Alerts({ onSeen }: { onSeen?: () => void }) {
         </button>
       </div>
 
-      {err && <div className="err"><AlertTriangleIcon size={16} />{err}</div>}
+      <ErrorBanner error={err} />
 
       <div className="cards">
         <div className="card">

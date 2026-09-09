@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
+import { ErrorBanner } from '../components/Notice'
 import type { Summary } from '../api'
 
 const WINDOWS = [15, 60, 240, 1440]
@@ -24,10 +25,10 @@ function Bars({ rows, max }: { rows: { label: string; value: number }[]; max: nu
 export default function Analytics() {
   const [minutes, setMinutes] = useState(60)
   const [sum, setSum] = useState<Summary | null>(null)
-  const [err, setErr] = useState('')
+  const [err, setErr] = useState<unknown>(null)
 
   useEffect(() => {
-    const load = () => api.summary(minutes).then(setSum).catch((e) => setErr(e.message ?? String(e)))
+    const load = () => api.summary(minutes).then(setSum).catch((e) => setErr(e))
     load()
     const t = setInterval(load, 15000)
     return () => clearInterval(t)
@@ -40,7 +41,7 @@ export default function Analytics() {
     <>
       <h2>Analytics</h2>
       <div className="sub">Vehicle and plate throughput across the onboarded network</div>
-      {err && <div className="err">{err}</div>}
+      <ErrorBanner error={err} />
 
       <div className="row" style={{ marginBottom: 14 }}>
         {WINDOWS.map((w) => (
@@ -76,8 +77,8 @@ export default function Analytics() {
         {sum && sum.series.length > 0 ? (
           <>
             <div className="spark tall">
-              {sum.series.map((s, i) => (
-                <div key={i} className="spark-col"
+              {sum.series.map((s) => (
+                <div key={s.t} className="spark-col"
                      title={`${s.t} — ${s.vehicles} vehicles, ${s.plates} plates`}>
                   <div className="spark-plates" style={{ height: `${(s.plates / peak) * 100}%` }} />
                   <div className="spark-vehicles" style={{ height: `${((s.vehicles - s.plates) / peak) * 100}%` }} />

@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, alertSocket, can } from '../api'
+import { ErrorBanner } from '../components/Notice'
 import type { Summary, FleetHealth, WorkerStatus } from '../api'
 import {
   ActivityIcon,
-  AlertTriangleIcon,
   CameraIcon,
   CarIcon,
   CpuIcon,
@@ -19,14 +19,14 @@ export default function Dashboard() {
   const [fleet, setFleet] = useState<FleetHealth | null>(null)
   const [workers, setWorkers] = useState<WorkerStatus | null>(null)
   const [live, setLive] = useState<any[]>([])
-  const [err, setErr] = useState('')
+  const [err, setErr] = useState<unknown>(null)
   const [seeding, setSeeding] = useState(false)
   const [seedNote, setSeedNote] = useState('')
 
   const load = () => {
     Promise.all([api.summary(60), api.fleetHealth(), api.workers()])
-      .then(([s, f, w]) => { setSum(s); setFleet(f); setWorkers(w); setErr('') })
-      .catch((e) => setErr(String(e.message ?? e)))
+      .then(([s, f, w]) => { setSum(s); setFleet(f); setWorkers(w); setErr(null) })
+      .catch((e) => setErr(e))
   }
 
   useEffect(() => {
@@ -39,13 +39,13 @@ export default function Dashboard() {
   const handleSeedDemo = async () => {
     setSeeding(true)
     setSeedNote('')
-    setErr('')
+    setErr(null)
     try {
       const res = await api.seedDemo('GJ01AB1234', 6)
       setSeedNote(`Demo seeded: ${res.sightings_created} sightings generated for ${res.plate}`)
       load()
     } catch (e: any) {
-      setErr(e.message ?? String(e))
+      setErr(e)
     } finally {
       setSeeding(false)
     }
@@ -85,7 +85,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {err && <div className="err"><AlertTriangleIcon size={16} />{err}</div>}
+      <ErrorBanner error={err} />
       {seedNote && (
         <div className="note">
           <SparklesIcon size={16} />
@@ -169,9 +169,9 @@ export default function Dashboard() {
             {sum && sum.series.length > 0 ? (
               <>
                 <div className="spark">
-                  {sum.series.map((s, i) => (
+                  {sum.series.map((s) => (
                     <div
-                      key={i}
+                      key={s.t}
                       style={{ height: `${Math.max(4, (s.vehicles / peak) * 100)}%` }}
                       title={`${s.t} — ${s.vehicles} vehicles, ${s.plates} plates`}
                     />
@@ -263,7 +263,7 @@ export default function Dashboard() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 'calc(100vh - 220px)', overflowY: 'auto' }}>
               {live.map((e, i) => (
                 <div
-                  key={i}
+                  key={e.sighting_id ?? e.id ?? `${e.plate ?? 'event'}-${e.at instanceof Date ? e.at.getTime() : i}`}
                   style={{
                     background: e.type === 'alert' ? 'rgba(239, 68, 68, 0.08)' : 'rgba(255, 255, 255, 0.02)',
                     border: `1px solid ${e.type === 'alert' ? 'rgba(239, 68, 68, 0.3)' : 'var(--line)'}`,

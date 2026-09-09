@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, can } from '../api'
+import { ErrorBanner } from '../components/Notice'
 import type { AuditRow } from '../api'
 
 export default function Audit() {
   const [rows, setRows] = useState<AuditRow[]>([])
   const [q, setQ] = useState('')
-  const [err, setErr] = useState('')
+  const [err, setErr] = useState<unknown>(null)
 
   // The trail names every operator who touched the system and records failed
   // logins, so it is admin-only. The server enforces this too; this just
@@ -14,11 +15,18 @@ export default function Audit() {
 
   useEffect(() => {
     if (!allowed) return
-    const load = () => api.audit(300).then(setRows).catch((e) => setErr(e.message ?? String(e)))
+    const load = () => api.audit(300).then(setRows).catch((e) => setErr(e))
     load()
     const t = setInterval(load, 12000)
     return () => clearInterval(t)
   }, [allowed])
+
+  const shown = useMemo(() => {
+    const needle = q.trim().toLowerCase()
+    if (!needle) return rows
+    return rows.filter((r) =>
+      `${r.username} ${r.role} ${r.action} ${r.target} ${r.status}`.toLowerCase().includes(needle))
+  }, [rows, q])
 
   if (!allowed) {
     return (
@@ -36,13 +44,6 @@ export default function Audit() {
     )
   }
 
-  const shown = useMemo(() => {
-    const needle = q.trim().toLowerCase()
-    if (!needle) return rows
-    return rows.filter((r) =>
-      `${r.username} ${r.role} ${r.action} ${r.target} ${r.status}`.toLowerCase().includes(needle))
-  }, [rows, q])
-
   const denied = rows.filter((r) => r.status === 401 || r.status === 403).length
 
   const colour = (status: number) =>
@@ -54,7 +55,7 @@ export default function Audit() {
       <div className="sub">
         Append-only record of every mutating request · {rows.length} entries · {denied} denied
       </div>
-      {err && <div className="err">{err}</div>}
+      <ErrorBanner error={err} />
 
       <div className="panel">
         <div className="row">
