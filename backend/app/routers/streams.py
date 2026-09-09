@@ -1,6 +1,5 @@
 import time
 
-import cv2
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
@@ -42,27 +41,23 @@ def status():
 
 @router.get("/{camera_id}/snapshot")
 def snapshot(camera_id: int, db: Session = Depends(get_db)):
-    """Dashboard preview. Serves the running worker's published frame when
-    fresh; otherwise serves the last cached frame (so tiles still show real
-    footage when the grid is offline / in sandbox mode); RTSP grab is the last
-    resort for a camera with no cached frame."""
+    """Dashboard preview. Cache-only: serves the worker-published frame.
+
+    Never opens RTSP on the request path — the grid is offline-capable and
+    a synchronous VideoCapture.read() blocks the HTTP worker for ~30s per
+    tile (see cap_ffmpeg timeout spam), starving login and other APIs.
+    Workers publish live_cam{id}.jpg every ~3s when running; otherwise 404
+    fast and the frontend shows the Analytics Idle tile.
+    """
     live = settings.snapshot_dir / f"live_cam{camera_id}.jpg"
-    fresh = live.exists() and time.time() - live.stat().st_mtime < 20
-    from .. import sim
-    if live.exists() and (fresh or sim.running() or True):
+    if live.exists():
+        fresh = time.time() - live.stat().st_mtime < 20
+        headers = {"Cache-Control": "no-cache"}
+        if not fresh:
+            headers["X-Sentinel-Stale"] = "1"
         return Response(content=live.read_bytes(), media_type="image/jpeg",
-                        headers={"Cache-Control": "no-cache"})
-    cam = db.get(Camera, camera_id)
-    if cam is None or not cam.rtsp_url:
-        raise HTTPException(404, "Camera not found or has no stream URL")
-    cap = cv2.VideoCapture(cam.rtsp_url)
-    try:
-        ok, frame = cap.read()
-    finally:
-        cap.release()
-    if not ok:
-        raise HTTPException(502, "Could not read frame from stream")
-    ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
-    if not ok:
-        raise HTTPException(500, "Encode failed")
-    return Response(content=buf.tobytes(), media_type="image/jpeg")
+                        headers=headers)
+    # Fast 404 — do not touch RTSP here. Verify camera exists for a clear msg.
+    if db.get(Camera, camera_id) is None:
+        raise HTTPException(404, "Camera not found")
+    raise HTTPException(404, "No snapshot yet (analytics idle or offline)")

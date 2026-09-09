@@ -11,7 +11,7 @@ import {
   LayersIcon,
   RefreshCwIcon,
   RouteIcon,
-  SparklesIcon,
+  ZapIcon,
 } from '../components/Icons'
 
 export default function Dashboard() {
@@ -73,7 +73,7 @@ export default function Dashboard() {
               disabled={seeding}
               title="Seed 6-hop simulated stolen vehicle route for GJ01AB1234"
             >
-              <SparklesIcon size={14} />
+              <ZapIcon size={14} />
               {seeding ? 'Seeding Demo…' : 'Seed Hero Demo'}
             </button>
           )}
@@ -88,7 +88,7 @@ export default function Dashboard() {
       <ErrorBanner error={err} />
       {seedNote && (
         <div className="note">
-          <SparklesIcon size={16} />
+          <ZapIcon size={16} />
           <span>{seedNote} — <Link to="/trace?plate=GJ01AB1234" style={{ fontWeight: 600, textDecoration: 'underline' }}>Trace Vehicle GJ01AB1234</Link></span>
         </div>
       )}
@@ -163,7 +163,7 @@ export default function Dashboard() {
         <div>
           <div className="panel">
             <h3>
-              <ActivityIcon size={14} style={{ color: 'var(--accent)' }} />
+              <ActivityIcon size={14} />
               Detection Volume Over 60 Minutes
             </h3>
             {sum && sum.series.length > 0 ? (
@@ -192,7 +192,7 @@ export default function Dashboard() {
 
           <div className="panel">
             <h3>
-              <LayersIcon size={14} style={{ color: 'var(--accent)' }} />
+              <LayersIcon size={14} />
               Camera Status By Department
             </h3>
             {fleet && fleet.by_department.length > 0 ? (
@@ -214,7 +214,7 @@ export default function Dashboard() {
 
           <div className="panel">
             <h3>
-              <CameraIcon size={14} style={{ color: 'var(--accent)' }} />
+              <CameraIcon size={14} />
               High-Activity Camera Junctions
             </h3>
             {sum && sum.top_cameras.length > 0 ? (
@@ -250,7 +250,7 @@ export default function Dashboard() {
 
         <div className="panel" style={{ position: 'sticky', top: 72 }}>
           <h3>
-            <SparklesIcon size={14} style={{ color: 'var(--accent)' }} />
+            <ZapIcon size={14} />
             Live Intelligence Stream
           </h3>
           {live.length === 0 ? (
@@ -260,16 +260,11 @@ export default function Dashboard() {
               <br /><span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Watchlist matches & sightings stream here live.</span>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 'calc(100vh - 220px)', overflowY: 'auto' }}>
+            <div className="event-list">
               {live.map((e, i) => (
                 <div
                   key={e.sighting_id ?? e.id ?? `${e.plate ?? 'event'}-${e.at instanceof Date ? e.at.getTime() : i}`}
-                  style={{
-                    background: e.type === 'alert' ? 'rgba(239, 68, 68, 0.08)' : 'rgba(255, 255, 255, 0.02)',
-                    border: `1px solid ${e.type === 'alert' ? 'rgba(239, 68, 68, 0.3)' : 'var(--line)'}`,
-                    borderRadius: 6,
-                    padding: '10px 12px',
-                  }}
+                  className={e.type === 'alert' ? 'event-card alert' : 'event-card'}
                 >
                   <div className="row" style={{ justifyContent: 'space-between', marginBottom: 4 }}>
                     {e.plate ? (
@@ -279,22 +274,16 @@ export default function Dashboard() {
                     ) : (
                       <span className="mono" style={{ fontWeight: 600 }}>{e.type ?? 'Event'}</span>
                     )}
-                    <span className="mono" style={{ fontSize: 11, color: 'var(--text-dim)' }}>
-                      {e.at?.toLocaleTimeString()}
-                    </span>
+                    <span className="event-time">{e.at?.toLocaleTimeString()}</span>
                   </div>
 
                   {e.reason && (
                     <div style={{ margin: '4px 0' }}>
-                      <span className="pill flag" style={{ fontSize: 10 }}>{e.reason}</span>
+                      <span className="pill flag">{e.reason}</span>
                     </div>
                   )}
 
-                  {e.camera_name && (
-                    <div style={{ color: 'var(--text-dim)', fontSize: 11.5, marginTop: 2 }}>
-                      {e.camera_name}
-                    </div>
-                  )}
+                  {e.camera_name && <div className="event-cam">{e.camera_name}</div>}
                 </div>
               ))}
             </div>

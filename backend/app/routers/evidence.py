@@ -61,16 +61,20 @@ def file_sha256(filename: str | None) -> str:
 
 
 def fetch_sightings(db: Session, plate: str) -> tuple[str, list[Sighting]]:
-    """Return (normalized_plate, sightings) for a plate, fuzzy-matched over
-    every sighting and ordered chronologically. Camera is eager-loaded so the
-    export does not issue a query per row."""
+    """Return (normalized_plate, sightings) for a plate, fuzzy-matched and
+    ordered chronologically. DB prefilters by length (±1 for max_dist=1) so
+    we don't load the whole table at scale; Python then does exact fuzzy."""
+    from sqlalchemy import func
     target = normalize(plate)
     if not target:
         return target, []
+    n = len(target)
     rows = (
         db.query(Sighting)
         .options(joinedload(Sighting.camera))
+        .filter(func.length(Sighting.plate).between(n - 1, n + 1))
         .order_by(Sighting.ts)
+        .limit(20000)
         .all()
     )
     matched = [s for s in rows if plates_match(s.plate, target)]

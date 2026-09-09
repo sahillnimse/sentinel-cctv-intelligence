@@ -135,6 +135,7 @@ export type WorkerStatus = {
   workers: {
     camera_id: number
     alive: boolean
+    streaming: boolean
     frames_processed: number
     source_url: string | null
     last_error: string | null

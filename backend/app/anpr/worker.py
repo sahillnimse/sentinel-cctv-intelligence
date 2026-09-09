@@ -186,6 +186,7 @@ class CameraWorker(threading.Thread):
         self.last_error: str | None = None
         self.frames_processed = 0
         self.source_url: str | None = None
+        self._last_frame_mono = 0.0  # monotonic ts of last decoded frame
         self._recent: dict[str, float] = {}  # plate -> monotonic ts of last sighting
         self._recent_vehicles: dict[tuple, float] = {}  # spatial cell -> ts
         self._voter = PlateVoter()
@@ -279,6 +280,7 @@ class CameraWorker(threading.Thread):
                 continue
             pts_ms = cap.get(cv2.CAP_PROP_POS_MSEC)
             self.frames_processed += 1
+            self._last_frame_mono = time.monotonic()
 
             # Dedup by clip position: log each moment of the looping clip once.
             # A frame whose PTS bucket we've already logged is a replay — we
@@ -524,17 +526,26 @@ def stop_worker(camera_id: int) -> bool:
 
 
 def worker_status() -> list[dict]:
+    now = time.monotonic()
     with _lock:
-        return [
-            {
-                "camera_id": w.camera_id,
-                "alive": w.is_alive(),
-                "frames_processed": w.frames_processed,
-                "source_url": w.source_url,
-                "last_error": w.last_error,
-            }
-            for w in _workers.values()
-        ]
+        out = []
+        for w in _workers.values():
+            alive = w.is_alive()
+            # Streaming = actually decoding frames recently. A thread stuck in
+            # reconnect backoff (grid offline) is alive but must NOT show PTS
+            # LIVE — that badge previously lit up for cameras with 0 frames.
+            streaming = alive and w.frames_processed > 0 and (now - w._last_frame_mono) < 15.0
+            out.append(
+                {
+                    "camera_id": w.camera_id,
+                    "alive": alive,
+                    "streaming": streaming,
+                    "frames_processed": w.frames_processed,
+                    "source_url": w.source_url,
+                    "last_error": w.last_error,
+                }
+            )
+        return out
 
 
 def stop_all() -> None:

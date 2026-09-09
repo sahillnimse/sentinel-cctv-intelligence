@@ -1,6 +1,7 @@
 import { MapContainer, TileLayer, CircleMarker, Polyline, Popup, useMap } from 'react-leaflet'
 import { useEffect } from 'react'
 import type { LatLngExpression } from 'leaflet'
+import { cssVar, useTheme } from '../theme'
 
 export type Pin = {
   id: number | string
@@ -29,21 +30,27 @@ function FitTo({ pins }: { pins: Pin[] }) {
 }
 
 export default function MapView({ pins, path, tall }: { pins: Pin[]; path?: Pin[]; tall?: boolean }) {
+  // Leaflet paints into SVG attributes from JavaScript, so it cannot read a
+  // custom property. Subscribing to the theme re-renders this with the new
+  // palette resolved rather than leaving stale colours on the map.
+  const { theme } = useTheme()
+  const base = cssVar('--primary', '#2f4858')
+
   return (
     <div className={tall ? 'map tall' : 'map'}>
-      <MapContainer center={FALLBACK} zoom={11} style={{ height: '100%', width: '100%' }}>
+      <MapContainer key={theme} center={FALLBACK} zoom={11} style={{ height: '100%', width: '100%' }}>
         <TileLayer
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-          attribution='&copy; OpenStreetMap &copy; CARTO'
+          url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution='&copy; OpenStreetMap contributors'
         />
         <FitTo pins={pins} />
         {path && path.length > 1 && (
           <Polyline positions={path.map((p) => [p.lat, p.lng] as [number, number])}
-                    pathOptions={{ color: '#4a9eff', weight: 2, dashArray: '5 5' }} />
+                    pathOptions={{ color: base, weight: 2, dashArray: '5 5' }} />
         )}
         {pins.map((p) => (
           <CircleMarker key={p.id} center={[p.lat, p.lng]} radius={p.radius ?? 6}
-                        pathOptions={{ color: p.colour ?? '#4a9eff', fillColor: p.colour ?? '#4a9eff', fillOpacity: 0.75, weight: 1.5 }}>
+                        pathOptions={{ color: p.colour ?? base, fillColor: p.colour ?? base, fillOpacity: 0.8, weight: 1.5 }}>
             <Popup>
               <strong>{p.label}</strong>
               {p.sub && <><br /><span style={{ fontSize: 12 }}>{p.sub}</span></>}

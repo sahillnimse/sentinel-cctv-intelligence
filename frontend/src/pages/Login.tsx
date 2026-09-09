@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { api, auth } from '../api'
 import type { Role } from '../api'
-import { ShieldIcon } from '../components/Icons'
+import { ShieldIcon, ZapIcon } from '../components/Icons'
 
 interface LoginProps {
   onDone: () => void
@@ -65,7 +65,7 @@ export default function Login({ onDone, onClose }: LoginProps) {
         </div>
 
         <div className="quick-roles" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none', marginBottom: 18 }}>
-          <div className="quick-roles-title" style={{ color: 'var(--accent)' }}>
+          <div className="quick-roles-title" style={{ color: 'var(--primary)' }}>
             Instant 1-Click Access
           </div>
           <div className="role-buttons">
@@ -76,7 +76,7 @@ export default function Login({ onDone, onClose }: LoginProps) {
               onClick={() => loginWith('admin', 'admin123')}
               title="Sign in with full administrative privileges"
             >
-              {busy ? '…' : '⚡ Admin'}
+              {busy ? '…' : <><ZapIcon size={12} />Admin</>}
             </button>
             <button
               type="button"

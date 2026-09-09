@@ -48,9 +48,18 @@ def update_camera(camera_id: int, body: CameraIn, db: Session = Depends(get_db))
 
 @router.delete("/{camera_id}")
 def delete_camera(camera_id: int, db: Session = Depends(get_db)):
+    from ..models import Alert, Sighting, VehicleDetection
     cam = db.get(Camera, camera_id)
     if cam is None:
         raise HTTPException(404, "Camera not found")
+    # Manual cascade: no ON DELETE CASCADE in models, so orphan rows would
+    # otherwise leave alerts pointing at missing sightings.
+    sight_ids = [r[0] for r in db.query(Sighting.id).filter(Sighting.camera_id == camera_id).all()]
+    if sight_ids:
+        db.query(Alert).filter(Alert.sighting_id.in_(sight_ids)).delete(synchronize_session=False)
+        db.query(Sighting).filter(Sighting.id.in_(sight_ids)).delete(synchronize_session=False)
+    db.query(VehicleDetection).filter(VehicleDetection.camera_id == camera_id).delete(synchronize_session=False)
+    db.query(Alert).filter(Alert.camera_id == camera_id).delete(synchronize_session=False)
     db.delete(cam)
     db.commit()
     return {"deleted": camera_id}
@@ -141,7 +150,7 @@ def sync_grid(db: Session = Depends(get_db)):
     for idx, it in enumerate(items):
         cid = str(it["id"])
         rtsp = f"{settings.grid_rtsp_base}/{cid}"
-        hls = f"{settings.grid_hls_base}/{cid}/index.m3u8"
+        hls = f"{settings.grid_hls_base}/live/stream/{cid}/index.m3u8"
         cam = db.query(Camera).filter(Camera.external_id == cid).first()
         if cam is None:
             # Spread unknown positions around Ahmedabad so the GIS map is usable;

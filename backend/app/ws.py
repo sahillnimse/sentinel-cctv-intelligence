@@ -6,12 +6,14 @@ startup so workers can push alerts onto it thread-safely.
 
 import asyncio
 import json
+import threading
 from typing import Optional
 
 from fastapi import WebSocket
 
 _loop: Optional[asyncio.AbstractEventLoop] = None
 _clients: set[WebSocket] = set()
+_clients_lock = threading.Lock()
 
 
 def set_loop(loop: asyncio.AbstractEventLoop) -> None:
@@ -21,22 +23,28 @@ def set_loop(loop: asyncio.AbstractEventLoop) -> None:
 
 async def connect(ws: WebSocket) -> None:
     await ws.accept()
-    _clients.add(ws)
+    with _clients_lock:
+        _clients.add(ws)
 
 
 def disconnect(ws: WebSocket) -> None:
-    _clients.discard(ws)
+    with _clients_lock:
+        _clients.discard(ws)
 
 
 async def _send_all(payload: str) -> None:
+    with _clients_lock:
+        targets = list(_clients)
     dead = []
-    for ws in _clients:
+    for ws in targets:
         try:
             await ws.send_text(payload)
         except Exception:
             dead.append(ws)
-    for ws in dead:
-        _clients.discard(ws)
+    if dead:
+        with _clients_lock:
+            for ws in dead:
+                _clients.discard(ws)
 
 
 def broadcast(event: dict) -> None:

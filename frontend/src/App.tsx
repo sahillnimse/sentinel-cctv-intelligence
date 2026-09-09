@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { NavLink, Route, Routes, useNavigate } from 'react-router-dom'
 import { alertSocket, api, auth, can } from './api'
 import type { Role } from './api'
+import { THEMES, useTheme } from './theme'
+import type { ThemeId } from './theme'
 import Dashboard from './pages/Dashboard'
 import LiveWall from './pages/LiveWall'
 import Cameras from './pages/Cameras'
@@ -32,7 +34,7 @@ import {
   RadarIcon,
   RouteIcon,
   ShieldIcon,
-  SparklesIcon,
+  ZapIcon,
   VideoIcon,
 } from './components/Icons'
 
@@ -77,6 +79,7 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null)
   const [timeStr, setTimeStr] = useState('')
   const [showLoginModal, setShowLoginModal] = useState(false)
+  const { theme, setTheme } = useTheme()
   const navigate = useNavigate()
 
   // Live time ticker
@@ -162,6 +165,20 @@ export default function App() {
           </div>
         ))}
 
+        <div className="theme-pick">
+          <label htmlFor="theme-select">Theme</label>
+          <select
+            id="theme-select"
+            value={theme}
+            onChange={(e) => setTheme(e.target.value as ThemeId)}
+            title="Colour scheme for the whole console"
+          >
+            {THEMES.map((t) => (
+              <option key={t.id} value={t.id}>{t.label}</option>
+            ))}
+          </select>
+        </div>
+
         <div className="whoami">
           <div className="whoami-user">
             <div className="whoami-name">{currentUsername}</div>
@@ -213,7 +230,7 @@ export default function App() {
               title="Trace sample stolen vehicle GJ01AB1234"
               style={{ fontSize: 11.5 }}
             >
-              <SparklesIcon size={13} style={{ color: 'var(--accent)' }} />
+              <ZapIcon size={13} />
               Quick Demo Plate
             </button>
 

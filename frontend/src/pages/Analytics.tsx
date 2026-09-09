@@ -88,8 +88,8 @@ export default function Analytics() {
             <div className="row" style={{ justifyContent: 'space-between', marginTop: 8, fontSize: 11, color: 'var(--text-dim)' }}>
               <span>{sum.series[0]?.t} · {sum.bucket_minutes}m buckets</span>
               <span>
-                <span style={{ color: 'var(--accent)' }}>■</span> plates read{'  '}
-                <span style={{ color: '#2d4a6b' }}>■</span> vehicles without a plate
+                <span style={{ color: 'var(--primary)' }}>■</span> plates read{'  '}
+                <span style={{ color: 'var(--chart-dim)' }}>■</span> vehicles without a plate
               </span>
               <span>{sum.series[sum.series.length - 1]?.t}</span>
             </div>

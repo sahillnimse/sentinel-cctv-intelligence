@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, can } from '../api'
+import { cssVar, useTheme } from '../theme'
 import { ErrorBanner } from '../components/Notice'
 import type { Camera, CameraIn, WorkerStatus } from '../api'
 import MapView from '../components/MapView'
 import type { Pin } from '../components/MapView'
 
-const STATUS_COLOUR: Record<string, string> = {
-  online: '#3fb950', offline: '#f85149', unknown: '#8b97a6',
-}
+// Resolved per render rather than fixed, so map pins follow the active theme.
+const statusColour = (): Record<string, string> => ({
+  online: cssVar('--ok', '#0f7b64'),
+  offline: cssVar('--bad', '#c8322b'),
+  unknown: cssVar('--dim', '#8d979d'),
+})
 
 const BLANK: Partial<CameraIn> = {
   name: '', department: 'Police', camera_type: 'IP', rtsp_url: '', hls_url: '',
@@ -28,6 +32,7 @@ export default function Cameras() {
   const [err, setErr] = useState<unknown>(null)
   const [note, setNote] = useState('')
   const [editing, setEditing] = useState<Partial<Camera> | null>(null)
+  useTheme()   // re-resolve pin colours when the palette changes
 
   const load = () => Promise.all([api.cameras(), api.workers()])
     .then(([c, w]) => { setCams(c); setWorkers(w); setErr(null) })
@@ -45,6 +50,7 @@ export default function Cameras() {
     return `${c.name} ${c.external_id} ${c.location_name} ${c.department}`.toLowerCase().includes(needle)
   })
 
+  const STATUS_COLOUR = statusColour()
   const pins: Pin[] = shown.reduce<Pin[]>((acc, c) => {
     if (c.latitude && c.longitude) {
       acc.push({

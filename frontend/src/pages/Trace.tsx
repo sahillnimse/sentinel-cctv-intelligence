@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../api'
+import { cssVar, useTheme } from '../theme'
 import { ErrorBanner } from '../components/Notice'
 import type { TraceResult } from '../api'
 import MapView from '../components/MapView'
@@ -12,7 +13,7 @@ import {
   FileTextIcon,
   MapPinIcon,
   SearchIcon,
-  SparklesIcon,
+  ZapIcon,
 } from '../components/Icons'
 
 const SAMPLE_PLATES = [
@@ -28,6 +29,7 @@ export default function Trace() {
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState<unknown>(null)
   const [seeding, setSeeding] = useState(false)
+  useTheme()   // re-resolve marker colours when the palette changes
 
   const run = useCallback(async (raw: string) => {
     const p = raw.trim().toUpperCase().replace(/\s+/g, '')
@@ -78,13 +80,21 @@ export default function Trace() {
   }
 
   const route = res?.route ?? []
+
+  // Marker colours are resolved from the active palette rather than fixed, so
+  // the route reads the same way whichever theme the operator is running.
+  const first_c = cssVar('--ok', '#0f7b64')
+  const last_c = cssVar('--bad', '#c8322b')
+  const flag_c = cssVar('--warn', '#c2760a')
+  const mid_c = cssVar('--primary', '#2f4858')
+
   const pins: Pin[] = route.map((r, i) => ({
     id: r.sighting_id,
     lat: r.latitude,
     lng: r.longitude,
     label: `${i + 1}. ${r.camera_name}`,
     sub: `${new Date(r.ts).toLocaleTimeString()} · conf ${(r.confidence * 100).toFixed(0)}%${r.flagged ? ' · IMPOSSIBLE HOP' : ''}`,
-    colour: r.flagged ? '#f59e0b' : i === 0 ? '#10b981' : i === route.length - 1 ? '#ef4444' : '#00f0ff',
+    colour: r.flagged ? flag_c : i === 0 ? first_c : i === route.length - 1 ? last_c : mid_c,
     radius: i === 0 || i === route.length - 1 ? 9 : 6,
   }))
 
@@ -168,10 +178,10 @@ export default function Trace() {
         <div className="panel">
           <div className="empty" style={{ padding: '36px 20px' }}>
             <CarIcon size={32} style={{ color: 'var(--text-dim)', marginBottom: 12, display: 'block', margin: '0 auto' }} />
-            No sightings recorded for <strong className="mono" style={{ color: '#fff' }}>{res.plate}</strong> yet.
+            No sightings recorded for <strong className="mono" style={{ color: 'var(--ink)' }}>{res.plate}</strong> yet.
             <div style={{ marginTop: 12 }}>
               <button className="glow-btn" onClick={handleSeedAndTrace} disabled={seeding}>
-                <SparklesIcon size={14} />
+                <ZapIcon size={14} />
                 {seeding ? 'Seeding Demo Route…' : 'Seed Hero Route for GJ01AB1234'}
               </button>
             </div>
@@ -184,7 +194,7 @@ export default function Trace() {
           <div className="cards">
             <div className="card">
               <div className="k">Plate Number</div>
-              <div className="v mono" style={{ fontSize: 22, color: 'var(--accent)' }}>{res.plate}</div>
+              <div className="v mono" style={{ fontSize: 22, color: 'var(--primary)' }}>{res.plate}</div>
             </div>
             <div className="card">
               <div className="k">Sightings Count</div>
@@ -211,8 +221,8 @@ export default function Trace() {
           </div>
 
           {flaggedCount > 0 && (
-            <div className="err" style={{ borderColor: 'rgba(245, 158, 11, 0.4)', background: 'rgba(245, 158, 11, 0.12)', color: '#fde68a' }}>
-              <AlertTriangleIcon size={18} style={{ color: '#f59e0b' }} />
+            <div className="err warn">
+              <AlertTriangleIcon size={18} />
               <div>
                 <strong>Spatio-Temporal Anomaly Detected:</strong> {flaggedCount} leg(s) exceeded the 150 km/h physical velocity ceiling.
                 Possible duplicate plate, cloned registration, or OCR ambiguity.
@@ -221,27 +231,27 @@ export default function Trace() {
           )}
 
           {vahan.owner_name && (
-            <div className="panel" style={{ background: 'rgba(2, 132, 199, 0.08)', borderColor: 'rgba(2, 132, 199, 0.25)' }}>
+            <div className="panel panel-accent">
               <h3>
-                <CarIcon size={14} style={{ color: 'var(--accent)' }} />
+                <CarIcon size={14} />
                 VAHAN / SARTHI Official Registry Record
               </h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, fontSize: 13 }}>
+              <div className="def-grid">
                 <div>
-                  <div style={{ color: 'var(--text-dim)', fontSize: 11, textTransform: 'uppercase' }}>Registered Owner</div>
-                  <div style={{ fontWeight: 600, color: '#fff', marginTop: 2 }}>{vahan.owner_name}</div>
+                  <div className="def-k">Registered Owner</div>
+                  <div className="def-v">{vahan.owner_name}</div>
                 </div>
                 <div>
-                  <div style={{ color: 'var(--text-dim)', fontSize: 11, textTransform: 'uppercase' }}>Make &amp; Model</div>
-                  <div style={{ fontWeight: 600, color: '#fff', marginTop: 2 }}>{vahan.make} {vahan.model} ({vahan.color})</div>
+                  <div className="def-k">Make &amp; Model</div>
+                  <div className="def-v">{vahan.make} {vahan.model} ({vahan.color})</div>
                 </div>
                 <div>
-                  <div style={{ color: 'var(--text-dim)', fontSize: 11, textTransform: 'uppercase' }}>RTO &amp; Class</div>
-                  <div style={{ fontWeight: 600, color: '#fff', marginTop: 2 }}>{vahan.registered_rto} · {vahan.vehicle_class} ({vahan.fuel})</div>
+                  <div className="def-k">RTO &amp; Class</div>
+                  <div className="def-v">{vahan.registered_rto} · {vahan.vehicle_class} ({vahan.fuel})</div>
                 </div>
                 <div>
-                  <div style={{ color: 'var(--text-dim)', fontSize: 11, textTransform: 'uppercase' }}>RC Status</div>
-                  <div style={{ marginTop: 2 }}>
+                  <div className="def-k">RC Status</div>
+                  <div className="def-v">
                     <span className={`pill ${vahan.rc_status === 'ACTIVE' ? 'online' : 'offline'}`}>
                       {vahan.rc_status}
                     </span>
@@ -253,20 +263,20 @@ export default function Trace() {
 
           <div className="panel">
             <h3>
-              <MapPinIcon size={14} style={{ color: 'var(--accent)' }} />
+              <MapPinIcon size={14} />
               Reconstructed Geographic Path
             </h3>
             <MapView pins={pins} path={pins} tall />
-            <div className="row" style={{ marginTop: 12, fontSize: 12, color: 'var(--text-muted)' }}>
-              <span>● <span style={{ color: '#10b981', fontWeight: 600 }}>First Sighting</span></span>
-              <span>● <span style={{ color: '#ef4444', fontWeight: 600 }}>Last Confirmed</span></span>
-              <span>● <span style={{ color: '#f59e0b', fontWeight: 600 }}>Flagged Impossible Hop (&gt;150 km/h)</span></span>
+            <div className="legend">
+              <span><span style={{ color: 'var(--ok)' }}>●</span> First Sighting</span>
+              <span><span style={{ color: 'var(--bad)' }}>●</span> Last Confirmed</span>
+              <span><span style={{ color: 'var(--warn)' }}>●</span> Flagged Impossible Hop (&gt;150 km/h)</span>
             </div>
           </div>
 
           <div className="panel">
             <h3>
-              <ClockIcon size={14} style={{ color: 'var(--accent)' }} />
+              <ClockIcon size={14} />
               Chronological Sightings Timeline ({route.length} hops)
             </h3>
             <table>

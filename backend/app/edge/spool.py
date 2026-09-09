@@ -46,7 +46,7 @@ class Spool:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.max_rows = max_rows
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._conn = sqlite3.connect(str(self.path), check_same_thread=False)
         self._conn.executescript(SCHEMA)
         # WAL keeps readers from blocking the writer during a drain.
@@ -81,12 +81,15 @@ class Spool:
                 "SELECT id, kind, payload FROM spool ORDER BY created_at LIMIT ?",
                 (limit,)).fetchall()
         out = []
+        bad_ids = []
         for rid, kind, payload in rows:
             try:
                 out.append((rid, kind, json.loads(payload)))
             except json.JSONDecodeError:
                 log.error("spool row %s has unparseable payload, dropping", rid)
-                self.ack([rid])
+                bad_ids.append(rid)
+        if bad_ids:
+            self.ack(bad_ids)
         return out
 
     def ack(self, ids: Iterable[int]) -> None:

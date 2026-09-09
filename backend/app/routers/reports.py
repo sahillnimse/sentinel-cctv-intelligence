@@ -40,18 +40,18 @@ def _window(minutes: int | None, since: str | None) -> datetime | None:
     return None
 
 
-def _collect(db: Session, cutoff: datetime | None, plates_only: bool):
+def _collect(db: Session, cutoff: datetime | None, plates_only: bool, limit: int = 10000):
     q = db.query(VehicleDetection)
     if cutoff is not None:
         q = q.filter(VehicleDetection.ts >= cutoff)
     if plates_only:
         q = q.filter(VehicleDetection.plate != "")
-    detections = q.order_by(VehicleDetection.ts).all()
+    detections = q.order_by(VehicleDetection.ts.desc()).limit(limit).all()
 
     sq = db.query(Sighting).options(joinedload(Sighting.camera))
     if cutoff is not None:
         sq = sq.filter(Sighting.ts >= cutoff)
-    sightings = sq.order_by(Sighting.ts).all()
+    sightings = sq.order_by(Sighting.ts.desc()).limit(limit).all()
 
     cams = {c.id: c for c in db.query(Camera).all()}
     return detections, sightings, cams

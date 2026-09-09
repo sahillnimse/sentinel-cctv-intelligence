@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { MapContainer, Rectangle, TileLayer, CircleMarker, Tooltip } from 'react-leaflet'
 import { api } from '../api'
+import { cssVar, useTheme } from '../theme'
 import { ErrorBanner } from '../components/Notice'
 import type { Camera, GapAnalysis } from '../api'
 
@@ -14,6 +15,7 @@ export default function Coverage() {
   const [data, setData] = useState<GapAnalysis | null>(null)
   const [cams, setCams] = useState<Camera[]>([])
   const [loading, setLoading] = useState(false)
+  const { theme } = useTheme()   // repaint the grid when the palette changes
   const [err, setErr] = useState<unknown>(null)
 
   const load = useCallback(() => {
@@ -44,6 +46,10 @@ export default function Coverage() {
     a.click()
     URL.revokeObjectURL(url)
   }
+
+  const okC = cssVar('--ok', '#0f7b64')
+  const badC = cssVar('--bad', '#c8322b')
+  const camC = cssVar('--primary', '#2f4858')
 
   const s = data?.summary
 
@@ -100,17 +106,17 @@ export default function Coverage() {
       <div className="panel">
         <h3>Coverage grid</h3>
         <div className="map tall">
-          <MapContainer center={centre} zoom={11} style={{ height: '100%', width: '100%' }}>
+          <MapContainer key={theme} center={centre} zoom={11} style={{ height: '100%', width: '100%' }}>
             <TileLayer
-              url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-              attribution="&copy; OpenStreetMap &copy; CARTO" />
+              url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution="&copy; OpenStreetMap contributors" />
             {(data?.cells ?? []).map((c) => (
               <Rectangle
                 key={`${c.lat}:${c.lng}`}
                 bounds={[[c.lat - c.lat_step / 2, c.lng - c.lng_step / 2],
                          [c.lat + c.lat_step / 2, c.lng + c.lng_step / 2]]}
                 pathOptions={{
-                  color: c.covered ? '#3fb950' : '#f85149',
+                  color: c.covered ? okC : badC,
                   weight: 0.5,
                   fillOpacity: c.covered ? 0.12 : 0.28,
                 }}>
@@ -121,16 +127,16 @@ export default function Coverage() {
             ))}
             {located.map((c) => (
               <CircleMarker key={c.id} center={[c.latitude, c.longitude]} radius={4}
-                            pathOptions={{ color: '#4a9eff', fillColor: '#4a9eff', fillOpacity: 1, weight: 1 }}>
+                            pathOptions={{ color: camC, fillColor: camC, fillOpacity: 1, weight: 1 }}>
                 <Tooltip>{c.name}</Tooltip>
               </CircleMarker>
             ))}
           </MapContainer>
         </div>
-        <div className="row" style={{ marginTop: 10, fontSize: 12, color: 'var(--text-dim)' }}>
-          <span><span style={{ color: '#3fb950' }}>■</span> covered</span>
-          <span><span style={{ color: '#f85149' }}>■</span> gap</span>
-          <span><span style={{ color: '#4a9eff' }}>●</span> camera</span>
+        <div className="legend">
+          <span><span style={{ color: 'var(--ok)' }}>■</span> covered</span>
+          <span><span style={{ color: 'var(--bad)' }}>■</span> gap</span>
+          <span><span style={{ color: 'var(--primary)' }}>●</span> camera</span>
         </div>
       </div>
 

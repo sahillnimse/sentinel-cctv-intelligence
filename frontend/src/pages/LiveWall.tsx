@@ -39,6 +39,13 @@ export default function LiveWall() {
     [workers]
   )
 
+  // Actually decoding frames recently. A worker stuck in reconnect backoff
+  // (grid offline) is alive but has no frames — it must not show PTS LIVE.
+  const streaming = useMemo(
+    () => new Set(workers?.workers.filter((w) => w.streaming ?? (w.alive && w.frames_processed > 0)).map((w) => w.camera_id) ?? []),
+    [workers]
+  )
+
   const departments = useMemo(
     () => Array.from(new Set(cams.map((c) => c.department))).sort(),
     [cams]
@@ -46,7 +53,7 @@ export default function LiveWall() {
 
   const shown = cams.filter((c) => {
     if (dept !== 'all' && c.department !== dept) return false
-    if (onlyRunning && !running.has(c.id)) return false
+    if (onlyRunning && !streaming.has(c.id)) return false
     if (q.trim()) {
       const needle = q.trim().toLowerCase()
       return `${c.name} ${c.external_id} ${c.location_name}`.toLowerCase().includes(needle)
@@ -126,7 +133,7 @@ export default function LiveWall() {
               style={{ width: 'auto', cursor: 'pointer' }}
               onChange={(e) => setOnlyRunning(e.target.checked)}
             />
-            Streaming Only ({running.size})
+            Streaming Only ({streaming.size})
           </label>
 
           <div style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-dim)' }}>
@@ -146,39 +153,24 @@ export default function LiveWall() {
         <div className="wall">
           {shown.map((c) => {
             const isRunning = running.has(c.id)
+            const isStreaming = streaming.has(c.id)
             return (
               <div className="tile" key={c.id}>
                 <div className="tile-img" onClick={() => setFocus(c)}>
-                  <img
-                    src={snapshotUrl(c.id, bust)}
-                    alt={c.name}
-                    loading="lazy"
-                    onError={(e) => {
-                      ;(e.target as HTMLImageElement).style.opacity = '0.2'
-                    }}
-                  />
-                  {isRunning ? (
-                    <div
-                      style={{
-                        position: 'absolute',
-                        top: 8,
-                        left: 8,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 5,
-                        background: 'rgba(0, 0, 0, 0.65)',
-                        backdropFilter: 'blur(4px)',
-                        padding: '2px 8px',
-                        borderRadius: 12,
-                        fontSize: 10,
-                        fontWeight: 600,
-                        color: 'var(--ok)',
-                        border: '1px solid rgba(16, 185, 129, 0.3)',
+                  {isStreaming ? (
+                    <img
+                      src={snapshotUrl(c.id, bust)}
+                      alt={c.name}
+                      loading="lazy"
+                      onError={(e) => {
+                        ;(e.target as HTMLImageElement).style.opacity = '0.2'
                       }}
-                    >
-                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--ok)' }} />
-                      PTS LIVE
-                    </div>
+                    />
+                  ) : null}
+                  {isStreaming ? (
+                    <div className="tile-live">PTS LIVE</div>
+                  ) : isRunning ? (
+                    <div className="tile-idle">Connecting…</div>
                   ) : (
                     <div className="tile-idle">Analytics Idle</div>
                   )}
@@ -219,7 +211,7 @@ export default function LiveWall() {
           <div className="modal-inner" onClick={(e) => e.stopPropagation()}>
             <div className="row" style={{ justifyContent: 'space-between', marginBottom: 14 }}>
               <div>
-                <h3 style={{ margin: 0, fontSize: 16, color: '#fff' }}>{focus.name}</h3>
+                <h3 style={{ margin: 0, fontSize: 16 }}>{focus.name}</h3>
                 <div style={{ color: 'var(--text-dim)', fontSize: 12 }}>
                   {focus.department} · {focus.location_name} · Lat {focus.latitude}, Lon {focus.longitude}
                 </div>
@@ -228,11 +220,17 @@ export default function LiveWall() {
             </div>
 
             <div style={{ position: 'relative', background: '#000', borderRadius: 8, overflow: 'hidden', marginBottom: 14 }}>
-              <img
-                src={snapshotUrl(focus.id, bust)}
-                alt={focus.name}
-                style={{ width: '100%', maxHeight: '60vh', objectFit: 'contain', display: 'block' }}
-              />
+              {streaming.has(focus.id) ? (
+                <img
+                  src={snapshotUrl(focus.id, bust)}
+                  alt={focus.name}
+                  style={{ width: '100%', maxHeight: '60vh', objectFit: 'contain', display: 'block' }}
+                />
+              ) : (
+                <div className="tile-idle" style={{ position: 'static', padding: 40, textAlign: 'center' }}>
+                  Analytics Idle — no frame published for this camera
+                </div>
+              )}
             </div>
 
             <div className="row" style={{ justifyContent: 'space-between' }}>
