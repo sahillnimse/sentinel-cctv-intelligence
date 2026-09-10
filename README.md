@@ -41,6 +41,43 @@ runs and workers do health monitoring only:
 .venv\Scripts\pip install -r requirements-ml.txt
 ```
 
+#### Running the models on an NVIDIA GPU
+
+Optional. The cascade runs about twice as fast on a GPU, measured end to end on
+a GTX 1650 against 1080p grid frames.
+
+```bash
+.venv\Scripts\pip uninstall -y onnxruntime
+.venv\Scripts\pip install "onnxruntime-gpu[cuda,cudnn]"
+```
+
+Install one wheel or the other, never both: they provide the same `onnxruntime`
+module and install order decides the winner. The extras pull the matching NVIDIA
+runtime into the virtualenv, roughly 2 GB, so no system CUDA Toolkit is needed.
+Check that `nvidia-smi` reports a driver at least as new as the CUDA version
+your onnxruntime-gpu wants.
+
+`INFERENCE_DEVICE` in `.env` selects `auto`, `cuda` or `cpu`, and governs the
+ONNX models and the torch face engine together. `auto` is the default and only
+uses the GPU after a probe actually executes a graph on it, because ONNX Runtime
+advertises the CUDA provider whenever it was compiled with one, whether or not
+the libraries load. `cuda` logs an error instead of degrading quietly. The
+operations console and `/api/streams/status` report which device is live:
+
+```
+loaded on cuda:0 (ocr=awiros-indian, vehicle=onnx)
+```
+
+Measured on the GTX 1650, one worker, 1080p frames:
+
+| device | median per frame | throughput |
+|---|---|---|
+| CPU | 1186 ms | 0.84 fps |
+| CUDA | 523 ms | 1.91 fps |
+
+Peak VRAM was 718 MB of 4096, so a 4 GB card has room. Set `CUDA_MEM_LIMIT_MB`
+to bound the arena on a card also driving a display.
+
 ### Frontend
 
 ```bash
