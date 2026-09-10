@@ -98,6 +98,41 @@ class WatchlistEntry(Base):
     photo: Mapped[str] = mapped_column(String(300), default="")  # enrollment snapshot filename
 
 
+class User(Base):
+    """An operator account.
+
+    Replaces the three env-var logins, which allowed exactly one admin, one
+    operator and one viewer and no way to add a second of any. A control room
+    runs shifts, so several operators is the normal case, and an account has to
+    be revocable when someone transfers out.
+
+    Accounts are deactivated, never deleted. The audit trail records actions by
+    username, so removing the row would orphan the history of everything that
+    person did, which is the opposite of what an evidentiary log is for.
+    """
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    username: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(String(255), default="")
+    role: Mapped[str] = mapped_column(String(20), default="viewer")  # viewer|operator|admin
+    full_name: Mapped[str] = mapped_column(String(200), default="")
+    badge_no: Mapped[str] = mapped_column(String(50), default="")     # service / personnel number
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Bumped on deactivation, role change and password reset. The JWT carries
+    # the value it was issued with, so raising it invalidates every token that
+    # user already holds. Without it a terminated account keeps working until
+    # its token expires, up to TOKEN_TTL_HOURS later.
+    token_version: Mapped[int] = mapped_column(default=1)
+    # Set on admin-created accounts and after an admin reset, so a temporary
+    # password cannot quietly become a permanent one.
+    must_change_password: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_by: Mapped[str] = mapped_column(String(100), default="")
+    last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
 class AuditLog(Base):
     """Append-only record of every mutating API call. Required for an
     evidentiary chain: who changed the watchlist, who started analytics on

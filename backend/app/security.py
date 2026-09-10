@@ -27,7 +27,12 @@ log = logging.getLogger("sentinel.security")
 
 ROLES = ("viewer", "operator", "admin")
 COOKIE_NAME = "sentinel_token"
-_DUMMY_PASSWORD = "sentinel-dummy-password-not-a-real-user"
+# Compared against when the username does not exist, so a miss costs the same
+# PBKDF2 work as a hit and cannot be timed apart.
+_DUMMY_HASH = (
+    "pbkdf2_sha256$600000$AAAAAAAAAAAAAAAAAAAAAA==$"
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+)
 
 
 def rank(role: str) -> int:
@@ -37,10 +42,13 @@ def rank(role: str) -> int:
         return -1
 
 
-def users() -> dict[str, tuple[str, str]]:
-    """username -> (password, role). Sourced from settings so deployments can
-    override without touching code. A real deployment swaps this for the
-    department's directory (LDAP/AD) behind the same interface."""
+def bootstrap_users() -> dict[str, tuple[str, str]]:
+    """username -> (password, role) for the accounts seeded on an empty database.
+
+    These are the env-var logins the app used to authenticate against directly.
+    They now exist only to create the first admin, so a fresh deployment is
+    reachable. Everything after that is managed in the users table.
+    """
     out = {}
     if settings.admin_username:
         out[settings.admin_username] = (settings.admin_password, "admin")
@@ -60,26 +68,84 @@ def const_eq(left: str, right: str) -> bool:
     return hmac.compare_digest(_digest(left), _digest(right))
 
 
-def authenticate(username: str, password: str) -> str | None:
-    """Return the role on success, None otherwise."""
-    entry = users().get(username)
-    expected, role = entry if entry is not None else (_DUMMY_PASSWORD, "")
-    matched = const_eq(password, expected)
-    if entry is None or not matched:
+def authenticate(db, username: str, password: str):
+    """Return the User on success, None otherwise.
+
+    Runs the hash comparison even when the username is unknown. Skipping it
+    would make a miss measurably faster than a hit and turn the login endpoint
+    into a username oracle.
+
+    An inactive account fails exactly like a wrong password: telling the caller
+    "this account is disabled" confirms the account exists.
+    """
+    from .models import User
+    from .utils import passwords
+
+    user = db.query(User).filter(User.username == username).first()
+    stored = user.password_hash if user is not None else _DUMMY_HASH
+    matched = passwords.verify(password, stored)
+    if user is None or not matched or not user.active:
         return None
-    return role
+
+    # Opportunistic upgrade: raising the work factor takes effect on next login
+    # rather than needing a forced reset for everyone.
+    if passwords.needs_rehash(user.password_hash):
+        user.password_hash = passwords.hash_password(password)
+        db.commit()
+    return user
 
 
-def issue_token(username: str, role: str) -> str:
+def issue_token(username: str, role: str, *, uid: int | None = None,
+                token_version: int = 1) -> str:
+    """Sign a session token.
+
+    Carries the user id and their token_version so a session can be revoked
+    before it expires. A stateless JWT is otherwise valid until TOKEN_TTL_HOURS
+    elapses, which would mean a terminated officer keeps their console for the
+    rest of the shift.
+    """
     return jwt.encode(
         {
             "sub": username,
             "role": role,
+            "uid": uid,
+            "ver": token_version,
             "exp": datetime.utcnow() + timedelta(hours=settings.token_ttl_hours),
         },
         settings.jwt_secret,
         algorithm="HS256",
     )
+
+
+def session_is_current(db, claims: dict | None) -> bool:
+    """Is the account behind these claims still entitled to this session?
+
+    Checked on every authenticated request. Three ways a still-unexpired token
+    stops being valid: the account was deactivated, its role changed, or its
+    password was reset. Each bumps token_version.
+
+    Tokens minted before this field existed carry no uid. Those are accepted on
+    username alone so a deployment upgrading in place does not log everyone out
+    mid-shift, and they age out at their own expiry.
+    """
+    from .models import User
+
+    if not claims:
+        return False
+    if claims.get("sub") == "edge":  # shared ingest token, not a user account
+        return True
+
+    uid = claims.get("uid")
+    if uid is None:
+        user = db.query(User).filter(User.username == claims.get("sub", "")).first()
+        return user is None or user.active
+
+    user = db.get(User, uid)
+    if user is None or not user.active:
+        return False
+    if claims.get("ver", 1) != user.token_version:
+        return False
+    return claims.get("role") == user.role
 
 
 def decode_token(token: str) -> dict | None:
@@ -143,6 +209,10 @@ MUTATION_ROLES = {
     "/api/copilot": "operator",
     "/api/sightings": "operator",
     "/api/adapters": "admin",
+    "/api/users": "admin",
+    # Changing your own password must stay reachable by whoever is logged in,
+    # including a viewer, and including an account forced to change it.
+    "/api/users/me/password": "viewer",
 }
 
 DEFAULT_MUTATION_ROLE = "operator"
@@ -151,6 +221,7 @@ DEFAULT_MUTATION_ROLE = "operator"
 # is false. The audit trail names operators and failed logins.
 READ_ROLES = {
     "/api/auth/audit": "admin",
+    "/api/users": "admin",
 }
 
 
