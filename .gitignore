@@ -131,6 +131,9 @@ pnpm-debug.log*
 # --- Editor & Operating System Metadata --------------------------------------
 .vscode/
 .idea/
+.claude/
+.cursor/
+.aider*
 *.swp
 *.swo
 *~
