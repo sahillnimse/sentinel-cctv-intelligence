@@ -113,6 +113,70 @@ class TestCameraRegistry:
         assert g["type"] == "FeatureCollection"
 
 
+class TestCredentialRedaction:
+    SECRET_RTSP = "rtsp://user:secret123@example.invalid:8554/stream/redact01"
+
+    def _admin(self, client):
+        return hdr(token(client, "admin", "admin123"))
+
+    def _viewer(self, client):
+        return hdr(token(client, "viewer", "viewer123"))
+
+    def test_admin_sees_full_url(self, client):
+        admin = self._admin(client)
+        r = client.post("/api/cameras", headers=admin, json={
+            "name": "Redact Full", "external_id": "redact01",
+            "rtsp_url": self.SECRET_RTSP,
+        })
+        assert r.status_code in (200, 201), r.text
+        assert r.json()["rtsp_url"] == self.SECRET_RTSP
+
+        rows = client.get("/api/cameras", headers=admin).json()
+        mine = next(c for c in rows if c["external_id"] == "redact01")
+        assert mine["rtsp_url"] == self.SECRET_RTSP
+
+    def test_viewer_and_anon_get_redacted_url(self, client, anon):
+        self.test_admin_sees_full_url(client)
+        viewer_rows = client.get("/api/cameras", headers=self._viewer(client)).json()
+        mine = next(c for c in viewer_rows if c["external_id"] == "redact01")
+        assert "secret123" not in mine["rtsp_url"], mine["rtsp_url"]
+        assert mine["rtsp_url"] == "rtsp://***@example.invalid:8554/stream/redact01"
+
+        anon.cookies.clear()
+        anon_rows = anon.get("/api/cameras").json()
+        mine = next(c for c in anon_rows if c["external_id"] == "redact01")
+        assert "secret123" not in mine["rtsp_url"], mine["rtsp_url"]
+        assert mine["rtsp_url"] == "rtsp://***@example.invalid:8554/stream/redact01"
+
+    def test_redacted_roundtrip_preserves_secret(self, client, anon):
+        admin = self._admin(client)
+        self.test_admin_sees_full_url(client)
+        # NOTE: the shared client keeps session cookies from login, so clear
+        # the jar right before the unauthenticated read.
+        anon.cookies.clear()
+        cam = next(c for c in anon.get("/api/cameras").json()
+                   if c["external_id"] == "redact01")
+        assert "***@" in cam["rtsp_url"]  # anon read: redacted
+        r = client.put(f"/api/cameras/{cam['id']}", headers=admin,
+                       json={**cam, "location_name": "Redact Road"})
+        assert r.status_code == 200
+        rows = client.get("/api/cameras", headers=admin).json()
+        mine = next(c for c in rows if c["external_id"] == "redact01")
+        assert mine["rtsp_url"] == self.SECRET_RTSP
+
+    def test_streams_status_redacted_for_non_admin(self, client, anon):
+        anon_rows = anon.get("/api/streams/status").json()["workers"]
+        assert isinstance(anon_rows, list)
+        for w in anon_rows:
+            for field in ("source_url", "last_error"):
+                val = w.get(field)
+                if val and "@" in str(val):
+                    assert "***@" in str(val), val
+                    # only the mask may precede the @
+                    userinfo = str(val).split("://", 1)[-1].split("@")[0]
+                    assert userinfo.endswith("***"), val
+
+
 class TestGapAnalysis:
     def test_shape(self, client):
         d = client.get("/api/analytics/gap-analysis?cell_km=5&reach_km=2").json()

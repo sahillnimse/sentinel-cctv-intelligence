@@ -98,7 +98,7 @@ cd backend
 .venv\Scripts\python -m pytest
 ```
 
-102 tests covering plate matching, RBAC, the edge spool, and the API end to end.
+239 tests covering plate matching, RBAC, credential redaction, the edge spool, and the API end to end.
 
 ---
 

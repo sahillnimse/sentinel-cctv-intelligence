@@ -18,12 +18,14 @@ import csv
 import io
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
 from sqlalchemy.orm import Session, joinedload
 
 from ..db import get_db
 from ..models import Alert, Camera, Sighting, VehicleDetection
+from ..security import claims_from_request, rank
+from ..utils import redact_url
 from .evidence import file_sha256
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -189,7 +191,7 @@ def vehicles_csv(minutes: int | None = Query(None, ge=1),
 
 
 @router.get("/registry.csv")
-def registry_csv(db: Session = Depends(get_db)):
+def registry_csv(request: Request, db: Session = Depends(get_db)):
     """The camera registry as CSV.
 
     Model 1 names export alongside search and filtering, and it round-trips:
@@ -198,6 +200,9 @@ def registry_csv(db: Session = Depends(get_db)):
     """
     cams = db.query(Camera).order_by(Camera.id).all()
 
+    claims = claims_from_request(request)
+    is_admin = claims is not None and rank(claims.get("role", "")) >= rank("admin")
+
     buf = io.StringIO()
     w = csv.writer(buf)
     w.writerow(["external_id", "name", "department", "camera_type",
@@ -205,9 +210,10 @@ def registry_csv(db: Session = Depends(get_db)):
                 "heading", "fov_deg", "range_m", "status", "last_seen",
                 "analytics_enabled"])
     for c in cams:
+        rtsp = c.rtsp_url if is_admin else redact_url(c.rtsp_url)
         w.writerow([c.external_id, c.name, c.department, c.camera_type,
                     c.latitude, c.longitude, c.location_name,
-                    c.rtsp_url, c.hls_url, c.heading, c.fov_deg, c.range_m,
+                    rtsp, c.hls_url, c.heading, c.fov_deg, c.range_m,
                     c.status, c.last_seen.isoformat() if c.last_seen else "",
                     "yes" if c.analytics_enabled else "no"])
 

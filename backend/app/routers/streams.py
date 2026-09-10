@@ -1,6 +1,6 @@
 import time
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 
 from ..anpr import pipeline
@@ -8,6 +8,8 @@ from ..anpr.worker import start_worker, stop_worker, worker_status
 from ..config import settings
 from ..db import get_db
 from ..models import Camera
+from ..security import claims_from_request, rank
+from ..utils import redact_url
 
 router = APIRouter(prefix="/streams", tags=["streams"])
 
@@ -59,8 +61,22 @@ def start_all(db: Session = Depends(get_db)):
 
 
 @router.get("/status")
-def status():
-    return {"anpr": pipeline.load_status(), "workers": worker_status(),
+def status(request: Request):
+    rows = worker_status()
+    claims = claims_from_request(request)
+    if claims is not None and rank(claims.get("role", "")) >= rank("admin"):
+        return {"anpr": pipeline.load_status(), "workers": rows,
+                "go2rtc_url": settings.go2rtc_url,
+                "whep_base": settings.grid_whep_base}
+    # source_url and last_error ("could not open <url>") both embed the grid
+    # credentials. worker_status() returns fresh dicts, so redacting here is
+    # display-only and never touches what the workers connect with.
+    for w in rows:
+        if w.get("source_url"):
+            w["source_url"] = redact_url(w["source_url"])
+        if w.get("last_error") and "@" in w["last_error"]:
+            w["last_error"] = redact_url(w["last_error"])
+    return {"anpr": pipeline.load_status(), "workers": rows,
             "go2rtc_url": settings.go2rtc_url,
             "whep_base": settings.grid_whep_base}
 

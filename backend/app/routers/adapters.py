@@ -7,12 +7,14 @@ drives all three.
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from .. import adapters
 from ..db import get_db
 from ..models import Camera
+from ..security import claims_from_request, rank
+from ..utils import redact_url
 
 log = logging.getLogger("sentinel.routers.adapters")
 
@@ -25,7 +27,7 @@ def list_adapters():
 
 
 @router.get("/{key}/discover")
-def discover(key: str, probe: bool = False):
+def discover(key: str, request: Request, probe: bool = False):
     adapter = adapters.get(key)
     if adapter is None:
         raise HTTPException(404, f"No adapter '{key}'")
@@ -35,6 +37,8 @@ def discover(key: str, probe: bool = False):
         log.exception("discovery failed for %s", key)
         raise HTTPException(502, f"Discovery failed: {exc}")
 
+    claims = claims_from_request(request)
+    is_admin = claims is not None and rank(claims.get("role", "")) >= rank("admin")
     out = []
     for cam in found:
         reachable = cam.reachable
@@ -43,10 +47,13 @@ def discover(key: str, probe: bool = False):
                 reachable = adapter.probe(cam)
             except Exception:
                 reachable = None
+        rtsp, whep = cam.rtsp_url, cam.whep_url
+        if not is_admin:
+            rtsp, whep = redact_url(rtsp), redact_url(whep)
         out.append({
             "external_id": cam.external_id, "name": cam.name,
-            "rtsp_url": cam.rtsp_url, "hls_url": cam.hls_url,
-            "whep_url": cam.whep_url, "department": cam.department,
+            "rtsp_url": rtsp, "hls_url": cam.hls_url,
+            "whep_url": whep, "department": cam.department,
             "camera_type": cam.camera_type, "location_name": cam.location_name,
             "latitude": cam.latitude, "longitude": cam.longitude,
             "codec": cam.codec, "resolution": cam.resolution,

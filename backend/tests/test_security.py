@@ -98,6 +98,24 @@ class TestReadRoles:
             assert required_read_role(path) is None, path
 
 
+class TestRedactUrl:
+    @pytest.mark.parametrize("raw,expected", [
+        ("rtsp://user:pass@host:8554/stream/cam01",
+         "rtsp://***@host:8554/stream/cam01"),
+        ("rtsp://host:8554/stream/cam01",
+         "rtsp://host:8554/stream/cam01"),
+        ("https://cctv.corp8.cloud/cam01/index.m3u8",
+         "https://cctv.corp8.cloud/cam01/index.m3u8"),
+        ("could not open rtsp://user:pass@host/stream/cam01",
+         "could not open rtsp://***@host/stream/cam01"),
+        ("", ""),
+        (None, None),
+    ])
+    def test_redaction(self, raw, expected):
+        from app.utils import redact_url
+        assert redact_url(raw) == expected
+
+
 class TestShippedDefaults:
     """Guard the defaults a clean checkout ships with.
 

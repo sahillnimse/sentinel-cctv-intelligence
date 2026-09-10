@@ -3,26 +3,46 @@ import io
 import json
 import urllib.request
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..db import get_db
 from ..models import Camera
 from ..schemas import CameraIn, CameraOut
+from ..security import claims_from_request, rank
+from ..utils import redact_url
 
 router = APIRouter(prefix="/cameras", tags=["cameras"])
 
 
+def _is_admin(request: Request) -> bool:
+    claims = claims_from_request(request)
+    return claims is not None and rank(claims.get("role", "")) >= rank("admin")
+
+
 @router.get("", response_model=list[CameraOut])
-def list_cameras(department: str | None = None, status: str | None = None,
+def list_cameras(request: Request, department: str | None = None, status: str | None = None,
                  db: Session = Depends(get_db)):
     q = db.query(Camera)
     if department:
         q = q.filter(Camera.department == department)
     if status:
         q = q.filter(Camera.status == status)
-    return q.order_by(Camera.id).all()
+    rows = q.order_by(Camera.id).all()
+    if _is_admin(request):
+        return rows
+    # Non-admin readers get credential-redacted URLs. Build fresh CameraOut
+    # copies rather than mutating the ORM rows, so a later commit in this
+    # session can never persist the "***@" marker over the real credentials
+    # the workers need to connect.
+    out = []
+    for c in rows:
+        payload = CameraOut.model_validate(c)
+        if payload.rtsp_url:
+            payload = payload.model_copy(update={"rtsp_url": redact_url(payload.rtsp_url)})
+        out.append(payload)
+    return out
 
 
 @router.post("", response_model=CameraOut)
@@ -40,6 +60,11 @@ def update_camera(camera_id: int, body: CameraIn, db: Session = Depends(get_db))
     if cam is None:
         raise HTTPException(404, "Camera not found")
     for k, v in body.model_dump().items():
+        # A non-admin client only ever saw "***@" in place of credentials, and
+        # may round-trip a GET body back into PUT. Never let the redaction
+        # marker overwrite the stored secret the workers connect with.
+        if k == "rtsp_url" and isinstance(v, str) and "***@" in v:
+            continue
         setattr(cam, k, v)
     db.commit()
     db.refresh(cam)
