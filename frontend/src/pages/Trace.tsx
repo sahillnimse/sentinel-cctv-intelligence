@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { api } from '../api'
+import { api, can } from '../api'
 import { cssVar, useTheme } from '../theme'
 import { ErrorBanner } from '../components/Notice'
 import type { TraceResult } from '../api'
@@ -180,10 +180,16 @@ export default function Trace() {
             <CarIcon size={32} style={{ color: 'var(--text-dim)', marginBottom: 12, display: 'block', margin: '0 auto' }} />
             No sightings recorded for <strong className="mono" style={{ color: 'var(--ink)' }}>{res.plate}</strong> yet.
             <div style={{ marginTop: 12 }}>
-              <button className="glow-btn" onClick={handleSeedAndTrace} disabled={seeding}>
-                <ZapIcon size={14} />
-                {seeding ? 'Seeding Demo Route…' : 'Seed Hero Route for GJ01AB1234'}
-              </button>
+              {can('admin') ? (
+                <button className="glow-btn" onClick={handleSeedAndTrace} disabled={seeding}>
+                  <ZapIcon size={14} />
+                  {seeding ? 'Seeding Demo Route…' : 'Seed Hero Route for GJ01AB1234'}
+                </button>
+              ) : (
+                <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+                  Seeding demo routes needs an Administrator account.
+                </span>
+              )}
             </div>
           </div>
         </div>

@@ -11,6 +11,7 @@ export default function Watchlist() {
   const [label, setLabel] = useState('')
   const [reason, setReason] = useState('stolen')
   const [err, setErr] = useState<unknown>(null)
+  const [busy, setBusy] = useState<'add' | number | null>(null)
 
   // Editing the watchlist is an operator action. The server enforces it; the
   // UI hides the controls so a viewer isn't offered buttons that only 403.
@@ -22,7 +23,8 @@ export default function Watchlist() {
   const add = async (e: React.FormEvent) => {
     e.preventDefault()
     const p = plate.trim().toUpperCase().replace(/\s+/g, '')
-    if (!p) return
+    if (!p || busy) return
+    setBusy('add')
     try {
       await api.addWatch({ plate: p, label: label.trim(), reason })
       setPlate('')
@@ -31,12 +33,23 @@ export default function Watchlist() {
       load()
     } catch (e: any) {
       setErr(e)
+    } finally {
+      setBusy(null)
     }
   }
 
   const remove = async (id: number) => {
-    await api.removeWatch(id)
-    load()
+    if (busy) return
+    setBusy(id)
+    try {
+      await api.removeWatch(id)
+      setErr(null)
+      load()
+    } catch (e: any) {
+      setErr(e)
+    } finally {
+      setBusy(null)
+    }
   }
 
   return (
@@ -58,7 +71,9 @@ export default function Watchlist() {
           <select value={reason} onChange={(e) => setReason(e.target.value)}>
             {REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
           </select>
-          <button className="primary" type="submit">Add</button>
+          <button className="primary" type="submit" disabled={busy === 'add'}>
+            {busy === 'add' ? 'Adding…' : 'Add'}
+          </button>
         </form>
       </div>
       )}
@@ -82,7 +97,10 @@ export default function Watchlist() {
                   </td>
                   <td style={{ textAlign: 'right' }}>
                     {canEdit && (
-                      <button className="danger" onClick={() => remove(r.id)}>Remove</button>
+                      <button className="danger" disabled={busy === r.id}
+                              onClick={() => remove(r.id)}>
+                        {busy === r.id ? 'Removing…' : 'Remove'}
+                      </button>
                     )}
                   </td>
                 </tr>

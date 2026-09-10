@@ -15,6 +15,7 @@ export default function Detections() {
   const [platesOnly, setPlatesOnly] = useState(false)
   const [minutes, setMinutes] = useState(60)
   const [err, setErr] = useState<unknown>(null)
+  const [refreshing, setRefreshing] = useState(false)
 
   const camName = useMemo(() => {
     const m = new Map(cams.map((c) => [c.id, c.name]))
@@ -24,13 +25,15 @@ export default function Detections() {
   useEffect(() => { api.cameras().then(setCams).catch(() => {}) }, [])
 
   const load = useCallback(() => {
+    setRefreshing(true)
     api.vehicles({
       limit: 200,
       minutes,
       camera_id: cameraId === '' ? undefined : cameraId,
       vehicle_type: vType || undefined,
       with_plate: platesOnly ? true : undefined,
-    }).then(setRows).catch((e) => setErr(e))
+    }).then((r) => { setRows(r); setErr(null) }).catch((e) => setErr(e))
+      .finally(() => setRefreshing(false))
   }, [cameraId, vType, platesOnly, minutes])
 
   useEffect(() => {
@@ -51,9 +54,9 @@ export default function Detections() {
           </div>
         </div>
 
-        <button onClick={load}>
+        <button onClick={load} disabled={refreshing}>
           <RefreshCwIcon size={14} />
-          Refresh
+          {refreshing ? 'Refreshing…' : 'Refresh'}
         </button>
       </div>
 

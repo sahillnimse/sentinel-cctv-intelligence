@@ -66,6 +66,11 @@ export default function Cameras() {
     if (w.alive) acc.push(w.camera_id)
     return acc
   }, []) ?? [])
+  // Frames actually flowing (not just a thread in reconnect backoff).
+  const streaming = new Set(workers?.workers.reduce<number[]>((acc, w) => {
+    if (w.streaming) acc.push(w.camera_id)
+    return acc
+  }, []) ?? [])
 
   const act = async (label: string, fn: () => Promise<unknown>, msg?: (r: any) => string) => {
     setBusy(label)
@@ -222,9 +227,11 @@ export default function Cameras() {
                     <td style={{ color: 'var(--text-dim)' }}>{c.location_name || '—'}</td>
                     <td><span className={`pill ${c.status}`}>{c.status}</span></td>
                     <td>
-                      {running.has(c.id)
+                      {streaming.has(c.id)
                         ? <span className="pill online">running</span>
-                        : <span className="pill unknown">idle</span>}
+                        : running.has(c.id)
+                          ? <span className="pill flag">connecting</span>
+                          : <span className="pill unknown">idle</span>}
                     </td>
                     <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                       {can('operator') && (running.has(c.id)

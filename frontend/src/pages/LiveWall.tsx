@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, can, snapshotUrl } from '../api'
 import { ErrorBanner } from '../components/Notice'
@@ -9,7 +9,9 @@ import {
   SearchIcon,
 } from '../components/Icons'
 
-const REFRESH_MS = 3000
+const REFRESH_MS = 3000      // how often each tile re-fetches its frame
+const STATUS_MS = 3000      // worker status: cheap, and drives which tiles light up
+const ROSTER_MS = 30000     // the camera registry itself changes rarely
 
 export default function LiveWall() {
   const [cams, setCams] = useState<Camera[]>([])
@@ -21,18 +23,42 @@ export default function LiveWall() {
   const [focus, setFocus] = useState<Camera | null>(null)
   const [err, setErr] = useState<unknown>(null)
   const [togglingId, setTogglingId] = useState<number | null>(null)
+  const [startingAll, setStartingAll] = useState(false)
+  const [note, setNote] = useState('')
+  // Start All and per-camera Start poll for a few seconds while decoders
+  // connect. Navigating away mid-poll must stop that loop rather than leave it
+  // writing state into an unmounted page.
+  const cancelled = useRef(false)
+  useEffect(() => {
+    cancelled.current = false
+    return () => { cancelled.current = true }
+  }, [])
 
-  const load = () =>
-    Promise.all([api.cameras(), api.workers()])
-      .then(([c, w]) => { setCams(c); setWorkers(w); setErr(null) })
-      .catch((e) => setErr(e))
+  const loadWorkers = useCallback(
+    () => api.workers().then((w) => { setWorkers(w); setErr(null) }).catch((e) => setErr(e)),
+    []
+  )
+  const loadCameras = useCallback(
+    () => api.cameras().then((c) => { setCams(c); setErr(null) }).catch((e) => setErr(e)),
+    []
+  )
+  const load = useCallback(
+    () => Promise.all([loadCameras(), loadWorkers()]),
+    [loadCameras, loadWorkers]
+  )
 
   useEffect(() => {
     load()
-    const meta = setInterval(load, 15000)
+    // Worker status is a small in-memory read, so poll it at frame rate. On the
+    // old fifteen-second interval a camera that had just come up stayed dark
+    // for up to fifteen seconds after it was already publishing frames, which
+    // read as "Start All did nothing". The camera roster is the expensive
+    // query and barely changes, so it keeps its own slow timer.
+    const status = setInterval(loadWorkers, STATUS_MS)
+    const roster = setInterval(loadCameras, ROSTER_MS)
     const frames = setInterval(() => setBust(Date.now()), REFRESH_MS)
-    return () => { clearInterval(meta); clearInterval(frames) }
-  }, [])
+    return () => { clearInterval(status); clearInterval(roster); clearInterval(frames) }
+  }, [load, loadWorkers, loadCameras])
 
   const running = useMemo(
     () => new Set(workers?.workers.filter((w) => w.alive).map((w) => w.camera_id) ?? []),
@@ -42,8 +68,24 @@ export default function LiveWall() {
   // Actually decoding frames recently. A worker stuck in reconnect backoff
   // (grid offline) is alive but has no frames — it must not show PTS LIVE.
   const streaming = useMemo(
-    () => new Set(workers?.workers.filter((w) => w.streaming ?? (w.alive && w.frames_processed > 0)).map((w) => w.camera_id) ?? []),
+    () => new Set(workers?.workers.filter((w) => w.streaming).map((w) => w.camera_id) ?? []),
     [workers]
+  )
+
+  // Has ever decoded a frame, so a preview JPEG exists on the server. Used to
+  // keep the last good image on screen through a short reconnect instead of
+  // dropping the tile to black, which made a brief hiccup look like an outage.
+  const hasFrames = useMemo(
+    () => new Set(workers?.workers.filter((w) => w.frames_processed > 0).map((w) => w.camera_id) ?? []),
+    [workers]
+  )
+
+  // Registry entries with coordinates but no stream. They belong on the map and
+  // in the inventory, and they can never go live, so the wall says which it is
+  // rather than showing them as idle next to a camera that merely needs starting.
+  const noStream = useMemo(
+    () => new Set(cams.filter((c) => !c.rtsp_url && !c.hls_url).map((c) => c.id)),
+    [cams]
   )
 
   const departments = useMemo(
@@ -61,15 +103,47 @@ export default function LiveWall() {
     return true
   })
 
+  const startAll = async () => {
+    if (startingAll) return
+    setStartingAll(true)
+    setNote('')
+    try {
+      const r = await api.startAll()
+      const parts = [`${r.started.length} started`]
+      if (r.already_running.length) parts.push(`${r.already_running.length} already running`)
+      if (r.no_stream.length) parts.push(`${r.no_stream.length} registry-only, no stream to decode`)
+      setNote(`${parts.join(' · ')} — of ${r.total_cameras} cameras`)
+      // Opening an RTSP connection takes a few seconds, so a single reload
+      // right here always reports zero streaming and the wall looks dead.
+      // Keep polling while the decoders come up.
+      for (let i = 0; i < 6 && !cancelled.current; i++) {
+        await new Promise((done) => setTimeout(done, 2000))
+        await loadWorkers()
+      }
+    } catch (e: any) {
+      setErr(e)
+    } finally {
+      setStartingAll(false)
+    }
+  }
+
   const toggle = async (c: Camera) => {
     setTogglingId(c.id)
+    setNote('')
     try {
       if (running.has(c.id)) {
         await api.stopCamera(c.id)
+        await loadWorkers()
       } else {
         await api.startCamera(c.id)
+        // Same reason as Start All: give the decoder a moment to connect
+        // before deciding the tile is still idle.
+        await loadWorkers()
+        for (let i = 0; i < 3 && !cancelled.current; i++) {
+          await new Promise((done) => setTimeout(done, 2000))
+          await loadWorkers()
+        }
       }
-      await load()
     } catch (e: any) {
       setErr(e)
     } finally {
@@ -91,10 +165,11 @@ export default function LiveWall() {
           {can('operator') && (
             <button
               className="primary"
-              onClick={() => api.startAll().then(load).catch((e) => setErr(e))}
+              disabled={startingAll}
+              onClick={startAll}
             >
               <ActivityIcon size={14} />
-              Start All Decoders
+              {startingAll ? 'Starting…' : 'Start All Decoders'}
             </button>
           )}
         </div>
@@ -133,12 +208,23 @@ export default function LiveWall() {
               style={{ width: 'auto', cursor: 'pointer' }}
               onChange={(e) => setOnlyRunning(e.target.checked)}
             />
-            Streaming Only ({streaming.size})
+            Streaming Only
           </label>
 
           <div style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-dim)' }}>
             Showing {shown.length} of {cams.length}
           </div>
+        </div>
+
+        {/* The wall's own account of why a tile is dark. Without this the only
+            way to tell a capped autostart from an unreachable grid was to read
+            the server log. */}
+        <div className="row" style={{ gap: 14, marginTop: 10, fontSize: 12, color: 'var(--text-dim)' }}>
+          <span><strong style={{ color: 'var(--ok)' }}>{streaming.size}</strong> streaming</span>
+          <span><strong style={{ color: 'var(--warn)' }}>{running.size - streaming.size}</strong> connecting</span>
+          <span><strong style={{ color: 'var(--ink)' }}>{cams.length - running.size - noStream.size}</strong> idle</span>
+          <span><strong style={{ color: 'var(--ink)' }}>{noStream.size}</strong> registry only</span>
+          {note && <span style={{ marginLeft: 'auto', color: 'var(--text-muted)' }}>{note}</span>}
         </div>
       </div>
 
@@ -154,14 +240,20 @@ export default function LiveWall() {
           {shown.map((c) => {
             const isRunning = running.has(c.id)
             const isStreaming = streaming.has(c.id)
+            const hasImage = hasFrames.has(c.id)
+            const isRegistryOnly = noStream.has(c.id)
             return (
               <div className="tile" key={c.id}>
                 <div className="tile-img" onClick={() => setFocus(c)}>
-                  {isStreaming ? (
+                  {/* Keep the last published frame up while a stream reconnects.
+                      Unmounting the img on every hiccup blanked the tile and
+                      threw away a picture that is only seconds old. */}
+                  {hasImage ? (
                     <img
                       src={snapshotUrl(c.id, bust)}
                       alt={c.name}
                       loading="lazy"
+                      style={{ opacity: isStreaming ? 1 : 0.45 }}
                       onError={(e) => {
                         ;(e.target as HTMLImageElement).style.opacity = '0.2'
                       }}
@@ -169,8 +261,10 @@ export default function LiveWall() {
                   ) : null}
                   {isStreaming ? (
                     <div className="tile-live">PTS LIVE</div>
+                  ) : isRegistryOnly ? (
+                    <div className="tile-idle">No stream URL · registry only</div>
                   ) : isRunning ? (
-                    <div className="tile-idle">Connecting…</div>
+                    <div className="tile-idle">{hasImage ? 'Reconnecting…' : 'Connecting…'}</div>
                   ) : (
                     <div className="tile-idle">Analytics Idle</div>
                   )}
@@ -191,7 +285,8 @@ export default function LiveWall() {
                     {can('operator') && (
                       <button
                         onClick={() => toggle(c)}
-                        disabled={togglingId === c.id}
+                        disabled={togglingId === c.id || (isRegistryOnly && !isRunning)}
+                        title={isRegistryOnly ? 'No RTSP or HLS URL on this camera' : undefined}
                         style={{ padding: '3px 8px', fontSize: 11.5 }}
                       >
                         {togglingId === c.id ? '…' : isRunning ? 'Stop' : 'Start'}
@@ -220,15 +315,20 @@ export default function LiveWall() {
             </div>
 
             <div style={{ position: 'relative', background: '#000', borderRadius: 8, overflow: 'hidden', marginBottom: 14 }}>
-              {streaming.has(focus.id) ? (
+              {hasFrames.has(focus.id) ? (
                 <img
                   src={snapshotUrl(focus.id, bust)}
                   alt={focus.name}
-                  style={{ width: '100%', maxHeight: '60vh', objectFit: 'contain', display: 'block' }}
+                  style={{
+                    width: '100%', maxHeight: '60vh', objectFit: 'contain',
+                    display: 'block', opacity: streaming.has(focus.id) ? 1 : 0.45,
+                  }}
                 />
               ) : (
                 <div className="tile-idle" style={{ position: 'static', padding: 40, textAlign: 'center' }}>
-                  Analytics Idle — no frame published for this camera
+                  {noStream.has(focus.id)
+                    ? 'Registry entry only — this camera has no RTSP or HLS URL to decode'
+                    : 'Analytics Idle — no frame published for this camera'}
                 </div>
               )}
             </div>

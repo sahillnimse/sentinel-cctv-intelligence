@@ -14,8 +14,16 @@ router = APIRouter(prefix="/streams", tags=["streams"])
 
 @router.post("/{camera_id}/start")
 def start(camera_id: int, db: Session = Depends(get_db)):
-    if db.get(Camera, camera_id) is None:
+    cam = db.get(Camera, camera_id)
+    if cam is None:
         raise HTTPException(404, "Camera not found")
+    # A registry-only camera has coordinates but nothing to decode. Starting a
+    # worker for it spawns a thread that exits on its first line and reports
+    # success, so the operator presses Start, sees no change, and has no idea
+    # why. Say so instead.
+    if not (cam.rtsp_url or cam.hls_url):
+        raise HTTPException(
+            409, "Camera has no RTSP or HLS URL — it is a registry entry only")
     started = start_worker(camera_id)
     return {"camera_id": camera_id, "started": started, "anpr": pipeline.load_status()}
 
@@ -27,9 +35,27 @@ def stop(camera_id: int):
 
 @router.post("/start-all")
 def start_all(db: Session = Depends(get_db)):
-    cams = db.query(Camera).filter(Camera.rtsp_url != "").all()
-    started = [c.id for c in cams if start_worker(c.id)]
-    return {"started": started, "total_with_url": len(cams)}
+    """Start a worker for every camera that has something to decode.
+
+    Selects on RTSP *or* HLS: the worker falls back to hls_url, so filtering on
+    rtsp_url alone left HLS-only cameras permanently dark on the live wall.
+
+    The response separates the three outcomes. Reporting only the newly started
+    ids made a second press look like a failure, because an already-running
+    camera returns False from start_worker and vanished from the count.
+    """
+    cams = db.query(Camera).order_by(Camera.id).all()
+    streamable = [c for c in cams if c.rtsp_url or c.hls_url]
+    started = [c.id for c in streamable if start_worker(c.id)]
+    already = [c.id for c in streamable if c.id not in set(started)]
+    no_stream = [c.id for c in cams if not (c.rtsp_url or c.hls_url)]
+    return {
+        "started": started,
+        "already_running": already,
+        "no_stream": no_stream,
+        "total_with_url": len(streamable),
+        "total_cameras": len(cams),
+    }
 
 
 @router.get("/status")

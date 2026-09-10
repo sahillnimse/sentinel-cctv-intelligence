@@ -12,7 +12,7 @@ from . import ws
 from .anpr.worker import start_worker, stop_all
 from .config import settings
 from .db import engine
-from .models import Base, Camera
+from .models import Base, Camera, has_stream
 from .db import SessionLocal
 from .routers import (adapters, alerts, analytics, auth, cameras, copilot, demo,
                       edge, evidence, fleet, integrations, ops, reports,
@@ -115,23 +115,48 @@ def prune_older_than(db, cutoff: datetime) -> dict[str, int]:
 def _autostart_workers():
     """Bring the grid live on boot — no manual 'start analytics'. Workers are
     staggered on a background thread so 30 HEVC decoders don't spin up at once
-    and spike memory (that OOM-crashed an early build). AUTOSTART_MAX_CAMERAS
-    caps how many come up on constrained machines."""
+    and spike memory (that OOM-crashed an early build).
+
+    AUTOSTART_MAX_CAMERAS picks how many come up:
+      negative  every camera that has a stream URL
+      0         none, wait for an operator to press Start All
+      positive  a cap, for constrained machines
+
+    Zero reads naturally as "no limit" but means the opposite, and a wall of
+    permanently idle tiles gives the operator nothing to go on, so the choice
+    is logged either way.
+    """
     import threading
     import time
 
+    cap = settings.autostart_max_cameras
     db = SessionLocal()
     try:
-        cams = db.query(Camera).filter(Camera.rtsp_url != "").order_by(Camera.id).all()
-        ids = [c.id for c in cams][: settings.autostart_max_cameras]
+        ids = [c.id for c in
+               db.query(Camera).filter(has_stream()).order_by(Camera.id).all()]
     finally:
         db.close()
+
+    eligible = len(ids)
+    if cap == 0:
+        log.warning("autostart disabled (AUTOSTART_MAX_CAMERAS=0): %d cameras "
+                    "have a stream but none will start until an operator "
+                    "presses Start All. Set it negative to start every camera.",
+                    eligible)
+        return
+    if cap > 0:
+        ids = ids[:cap]
+    if eligible > len(ids):
+        log.warning("autostart capped at %d of %d streamable cameras "
+                    "(AUTOSTART_MAX_CAMERAS=%d); the rest stay idle on the "
+                    "live wall", len(ids), eligible, cap)
 
     def stagger():
         for cid in ids:
             start_worker(cid)
             time.sleep(settings.autostart_stagger_ms / 1000.0)
-        log.info("auto-started analytics on %d cameras", len(ids))
+        log.info("auto-started analytics on %d of %d streamable cameras",
+                 len(ids), eligible)
 
     threading.Thread(target=stagger, name="autostart", daemon=True).start()
 
@@ -175,7 +200,8 @@ async def rbac_and_audit(request, call_next):
     """One gate for every /api call and for /snapshots.
 
     Mutations need a JWT (or the shared EDGE_TOKEN on ingest). Reads need a
-    token when auth_enforce_reads is set. Snapshot files are always gated.
+    token when auth_enforce_reads is set. Snapshot files follow the same
+    read policy.
     Every mutation is written to the audit trail with the caller, the outcome
     and the path.
     """
@@ -194,7 +220,10 @@ async def rbac_and_audit(request, call_next):
     request.state.claims = claims
 
     if path.startswith("/snapshots"):
-        if claims is None:
+        # Snapshots follow the global read policy: open in the sandbox
+        # (AUTH_ENFORCE_READS=false) so Guest browsing and <img> tags work
+        # without a session; strictly gated in deployment (default true).
+        if settings.auth_enforce_reads and claims is None:
             return JSONResponse({"detail": "Not authenticated"}, status_code=401)
         return await call_next(request)
 

@@ -142,6 +142,16 @@ export type WorkerStatus = {
   }[]
 }
 
+/** Outcome of Start All, split so the operator is told what actually happened
+ *  rather than just how many workers were newly created. */
+export type StartAllResult = {
+  started: number[]
+  already_running: number[]
+  no_stream: number[]
+  total_with_url: number
+  total_cameras: number
+}
+
 export type GapCell = {
   lat: number
   lng: number
@@ -393,8 +403,7 @@ export const api = {
     '/api/cameras/sync-grid', { method: 'POST' }),
   coverage: () => req<any>('/api/cameras/coverage'),
 
-  startAll: () => req<{ started: number[]; total_with_url: number }>(
-    '/api/streams/start-all', { method: 'POST' }),
+  startAll: () => req<StartAllResult>('/api/streams/start-all', { method: 'POST' }),
   startCamera: (id: number) => req<unknown>(`/api/streams/${id}/start`, { method: 'POST' }),
   stopCamera: (id: number) => req<unknown>(`/api/streams/${id}/stop`, { method: 'POST' }),
 

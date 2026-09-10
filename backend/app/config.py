@@ -27,7 +27,13 @@ class Settings(BaseSettings):
     sample_interval_ms: int = 400
     min_plate_confidence: float = 0.5
     # boot: how many cameras auto-start, and the delay between each starting
-    # (stagger prevents a memory spike from 30 HEVC decoders at once)
+    # (stagger prevents a memory spike from 30 HEVC decoders at once).
+    #   negative -> every camera that has a stream URL
+    #   0        -> autostart disabled, nothing comes up until an operator
+    #               presses Start All (this is what the test suite uses)
+    #   positive -> cap, for constrained machines
+    # 0 meaning "none" is easy to read as "no limit", so _autostart_workers
+    # logs which of the three it took at boot.
     autostart_max_cameras: int = 30
     autostart_stagger_ms: int = 800
     # sandbox simulation: generate live detections when the grid is unreachable
@@ -89,6 +95,33 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def _anchor_sqlite_path(url: str) -> str:
+    """Resolve a relative SQLite file path against backend/ rather than the
+    process working directory.
+
+    DATABASE_URL=sqlite:///./sentinel.db means a different file depending on
+    where uvicorn was launched from. Running it from the repository root
+    instead of backend/ creates a second, empty database, and the console then
+    comes up with an empty camera registry and a dark live wall for no visible
+    reason. The path in the URL is meant to name the deployment's database, not
+    the operator's current directory.
+
+    Absolute paths, :memory:, and every non-SQLite driver are left untouched.
+    """
+    prefix = "sqlite:///"
+    if not url.startswith(prefix):
+        return url
+    path = url[len(prefix):]
+    if not path or path.startswith(":memory:"):
+        return url
+    if Path(path).is_absolute():
+        return url
+    return prefix + (BASE_DIR / path).resolve().as_posix()
+
+
+settings.database_url = _anchor_sqlite_path(settings.database_url)
 settings.snapshot_dir.mkdir(parents=True, exist_ok=True)
 
 _DEFAULT_PASSWORDS = {"admin123", "operator123", "viewer123"}

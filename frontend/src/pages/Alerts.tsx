@@ -13,11 +13,15 @@ export default function Alerts({ onSeen }: { onSeen?: () => void }) {
   const [filter, setFilter] = useState<'all' | 'open' | 'acked'>('all')
   const [err, setErr] = useState<unknown>(null)
   const [ackingId, setAckingId] = useState<number | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
 
-  const load = () =>
+  const load = () => {
+    setRefreshing(true)
     api.alerts()
-      .then(setRows)
+      .then((rows) => { setRows(rows); setErr(null) })
       .catch((e) => setErr(e))
+      .finally(() => setRefreshing(false))
+  }
 
   useEffect(() => {
     load()
@@ -57,9 +61,9 @@ export default function Alerts({ onSeen }: { onSeen?: () => void }) {
           </div>
         </div>
 
-        <button onClick={load}>
+        <button onClick={load} disabled={refreshing}>
           <RefreshCwIcon size={14} />
-          Refresh
+          {refreshing ? 'Refreshing…' : 'Refresh'}
         </button>
       </div>
 

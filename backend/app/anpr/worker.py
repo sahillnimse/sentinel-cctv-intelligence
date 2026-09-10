@@ -15,6 +15,7 @@ Also doubles as the health monitor: updates camera.status / last_seen.
 
 import hashlib
 import logging
+import os
 import threading
 import time
 from datetime import datetime
@@ -190,6 +191,8 @@ class CameraWorker(threading.Thread):
         self._recent: dict[str, float] = {}  # plate -> monotonic ts of last sighting
         self._recent_vehicles: dict[tuple, float] = {}  # spatial cell -> ts
         self._voter = PlateVoter()
+        self._last_preview = 0.0                 # monotonic ts of last preview publish
+        self._published_once = False             # has this worker put up any frame yet
         self._last_face = 0.0                    # monotonic ts of last face pass
         self._recent_faces: dict[int, float] = {}  # watchlist person id -> last alert ts
         # clip-position (PTS) buckets we've already logged. The grid feeds are
@@ -209,6 +212,12 @@ class CameraWorker(threading.Thread):
             if not (cam.rtsp_url or cam.hls_url):
                 self.last_error = "camera has no stream URL"
                 return
+            # Drop the previous session's preview so a tile can never render
+            # a stale frame as live while this worker warms up.
+            try:
+                (settings.snapshot_dir / f"live_cam{self.camera_id}.jpg").unlink(missing_ok=True)
+            except OSError:
+                pass
             self._loop(db, cam)
         except Exception as exc:  # never let a worker die silently
             log.exception("camera %s worker crashed", self.camera_id)
@@ -282,6 +291,16 @@ class CameraWorker(threading.Thread):
             self.frames_processed += 1
             self._last_frame_mono = time.monotonic()
 
+            # A preview goes out at most once per PREVIEW_SECONDS. The very
+            # first decoded frame is published straight away, unannotated, so
+            # the tile lights up instead of waiting out model warmup; every
+            # publish after that happens below, annotated when there is
+            # something to draw.
+            due = now - self._last_preview > PREVIEW_SECONDS
+            if due and not self._published_once:
+                self._published_once = True
+                self._publish_preview(cam, frame, [])
+
             # Dedup by clip position: log each moment of the looping clip once.
             # A frame whose PTS bucket we've already logged is a replay — we
             # still run analytics (so the preview stays annotated) but skip the
@@ -322,19 +341,43 @@ class CameraWorker(threading.Thread):
                         finally:
                             _face_sem.release()
 
-            # publish an annotated preview so the dashboard shows marked-up
-            # detection without opening its own RTSP connection (30 tiles
-            # polling the gateway would melt it)
-            if now - getattr(self, "_last_preview", 0.0) > PREVIEW_SECONDS:
+            # The dashboard shows marked-up video without opening its own
+            # RTSP connection. Gated on the same timer as the warmup publish:
+            # keying this on `vehicles` alone encoded and wrote a JPEG on every
+            # sampled frame that held a vehicle, which at a 400 ms sample
+            # interval is roughly seven times the intended rate, per camera.
+            if due:
                 self._last_preview = now
-                shown = _annotate(frame, vehicles) if vehicles else frame
-                small = cv2.resize(shown, (640, 360)) if shown.shape[1] > 640 else shown
-                cv2.imwrite(str(settings.snapshot_dir / f"live_cam{cam.id}.jpg"), small,
-                            [cv2.IMWRITE_JPEG_QUALITY, 72])
+                self._publish_preview(cam, frame, vehicles)
 
         if cap is not None:
             cap.release()
         self._set_status(db, cam, "offline")
+
+    def _publish_preview(self, cam: Camera, frame, vehicles) -> None:
+        """Write the tile image for this camera, replacing it atomically.
+
+        The snapshot endpoint reads this file whole on an unrelated thread. A
+        plain imwrite truncates first, so a request landing mid-write is served
+        a partial JPEG and the tile flashes broken. Encode to a sibling file
+        and rename: os.replace is atomic on both POSIX and Windows.
+        """
+        final = settings.snapshot_dir / f"live_cam{cam.id}.jpg"
+        # Keep the .jpg extension: cv2.imwrite picks its encoder from it and
+        # returns false for anything it does not recognise.
+        tmp = final.with_name(f".{final.stem}.{os.getpid()}.{threading.get_ident()}.tmp.jpg")
+        try:
+            shown = _annotate(frame, vehicles) if vehicles else frame
+            small = cv2.resize(shown, (640, 360)) if shown.shape[1] > 640 else shown
+            if not cv2.imwrite(str(tmp), small, [cv2.IMWRITE_JPEG_QUALITY, 72]):
+                raise OSError(f"imwrite returned false for {tmp}")
+            os.replace(tmp, final)
+        except Exception:
+            log.exception("camera %s preview publish failed", cam.id)
+            try:
+                tmp.unlink(missing_ok=True)
+            except OSError:
+                pass
 
     def _log_vehicle(self, db, cam: Camera, frame, v, mono_now: float) -> None:
         """Store every vehicle detection (with its best-effort plate), deduped

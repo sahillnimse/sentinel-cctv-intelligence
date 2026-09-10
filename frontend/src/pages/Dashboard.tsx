@@ -22,11 +22,25 @@ export default function Dashboard() {
   const [err, setErr] = useState<unknown>(null)
   const [seeding, setSeeding] = useState(false)
   const [seedNote, setSeedNote] = useState('')
+  const [refreshing, setRefreshing] = useState(false)
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
 
   const load = () => {
-    Promise.all([api.summary(60), api.fleetHealth(), api.workers()])
-      .then(([s, f, w]) => { setSum(s); setFleet(f); setWorkers(w); setErr(null) })
-      .catch((e) => setErr(e))
+    setRefreshing(true)
+    // allSettled: one slow/failing panel must not blank the other two.
+    Promise.allSettled([api.summary(60), api.fleetHealth(), api.workers()])
+      .then(([s, f, w]) => {
+        let firstErr: unknown = null
+        if (s.status === 'fulfilled') setSum(s.value)
+        else firstErr = s.reason
+        if (f.status === 'fulfilled') setFleet(f.value)
+        else firstErr = firstErr ?? f.reason
+        if (w.status === 'fulfilled') setWorkers(w.value)
+        else firstErr = firstErr ?? w.reason
+        setErr(firstErr)
+        setUpdatedAt(new Date())
+      })
+      .finally(() => setRefreshing(false))
   }
 
   useEffect(() => {
@@ -78,10 +92,15 @@ export default function Dashboard() {
             </button>
           )}
 
-          <button onClick={load} title="Refresh telemetry">
+          <button onClick={load} disabled={refreshing} title="Refresh telemetry">
             <RefreshCwIcon size={14} />
-            Refresh
+            {refreshing ? 'Refreshing…' : 'Refresh'}
           </button>
+          {updatedAt && (
+            <span style={{ fontSize: 11.5, color: 'var(--text-dim)' }}>
+              Updated {updatedAt.toLocaleTimeString()}
+            </span>
+          )}
         </div>
       </div>
 

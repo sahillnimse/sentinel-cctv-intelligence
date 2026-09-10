@@ -114,6 +114,9 @@ export default function App() {
   }, [role])
 
   const signOut = () => {
+    // Best-effort server logout (clears the HttpOnly session cookie) before
+    // dropping the local session, so Sign out actually ends the session.
+    api.logout().catch(() => {})
     auth.clear()
     setRole(null)
     // Leave whatever privileged page we were on rather than sitting on a

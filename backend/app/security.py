@@ -142,6 +142,7 @@ MUTATION_ROLES = {
     "/api/alerts": "operator",
     "/api/copilot": "operator",
     "/api/sightings": "operator",
+    "/api/adapters": "admin",
 }
 
 DEFAULT_MUTATION_ROLE = "operator"

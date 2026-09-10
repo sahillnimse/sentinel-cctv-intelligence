@@ -52,7 +52,10 @@ async def add_person(label: str = Form(...), reason: str = Form("wanted"),
 
 @router.post("", response_model=WatchlistOut)
 def add_entry(body: WatchlistIn, db: Session = Depends(get_db)):
-    entry = WatchlistEntry(**{**body.model_dump(), "plate": normalize(body.plate)})
+    plate = normalize(body.plate)
+    if not plate:
+        raise HTTPException(400, "Plate is empty after normalisation — enter a valid registration number")
+    entry = WatchlistEntry(**{**body.model_dump(), "plate": plate})
     db.add(entry)
     db.commit()
     db.refresh(entry)
@@ -66,6 +69,8 @@ def update_entry(entry_id: int, body: WatchlistIn, db: Session = Depends(get_db)
         raise HTTPException(404, "Entry not found")
     data = body.model_dump()
     data["plate"] = normalize(data["plate"])
+    if entry.kind == "vehicle" and not data["plate"]:
+        raise HTTPException(400, "Plate is empty after normalisation — enter a valid registration number")
     for k, v in data.items():
         setattr(entry, k, v)
     db.commit()

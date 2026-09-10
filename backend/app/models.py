@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import (Boolean, DateTime, Float, ForeignKey, LargeBinary,
-                        String, Text)
+                        String, Text, and_, or_)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -32,6 +32,18 @@ class Camera(Base):
     range_m: Mapped[float] = mapped_column(Float, default=80.0)    # nominal ground range (metres)
 
     sightings: Mapped[list["Sighting"]] = relationship(back_populates="camera")
+
+
+def has_stream():
+    """SQL predicate for cameras the ingestion worker can actually open.
+
+    CameraWorker tries rtsp_url first and falls back to hls_url, so selecting
+    on rtsp_url alone silently excludes HLS-only cameras from autostart and
+    from Start All. They then sit on the live wall as permanently idle tiles
+    with no explanation. Both call sites use this instead.
+    """
+    return or_(and_(Camera.rtsp_url.isnot(None), Camera.rtsp_url != ""),
+               and_(Camera.hls_url.isnot(None), Camera.hls_url != ""))
 
 
 class Sighting(Base):
