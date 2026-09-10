@@ -36,8 +36,13 @@ class _FaceEngine:
         import torch
         from facenet_pytorch import MTCNN, InceptionResnetV1
 
+        from ..utils.device import torch_device
+
         self.torch = torch
-        self.device = "cpu"
+        # Follows the same INFERENCE_DEVICE setting as the ONNX models, but
+        # falls back independently: a CUDA onnxruntime and a CUDA torch are
+        # separate installs and either can be absent.
+        self.device = torch_device()
         self.mtcnn = MTCNN(
             image_size=160, margin=14, keep_all=True, post_process=True,
             min_face_size=24, thresholds=[0.6, 0.7, 0.7], device=self.device,

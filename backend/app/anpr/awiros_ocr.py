@@ -17,7 +17,12 @@ _INPUT_SHAPE = (3, 48, 320)
 
 
 class AwirosOCR:
-    def __init__(self, model_path: str, dict_path: str, num_threads: int = 0):
+    def __init__(self, model_path: str, dict_path: str, num_threads: int = 0,
+                 providers=None):
+        if providers is None:
+            from ..utils.device import onnx_providers
+
+            providers = onnx_providers()
         so = ort.SessionOptions()
         so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
         # Critical: the model's weights/activations produce denormal floats,
@@ -26,7 +31,7 @@ class AwirosOCR:
         if num_threads > 0:
             so.intra_op_num_threads = num_threads
         self.session = ort.InferenceSession(
-            model_path, sess_options=so, providers=["CPUExecutionProvider"]
+            model_path, sess_options=so, providers=providers
         )
         self.input_name = self.session.get_inputs()[0].name
 

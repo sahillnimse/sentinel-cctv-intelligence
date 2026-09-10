@@ -26,6 +26,18 @@ class Settings(BaseSettings):
     auth_enforce_reads: bool = True
     sample_interval_ms: int = 400
     min_plate_confidence: float = 0.5
+    # Where the models run: auto | cuda | cpu.
+    #   auto  use the GPU when a real probe succeeds, else CPU
+    #   cuda  require the GPU, and log an error rather than degrade quietly
+    #   cpu   never touch the GPU
+    # Needs onnxruntime-gpu; the plain onnxruntime wheel has no CUDA provider
+    # and auto will correctly land on CPU.
+    inference_device: str = "auto"
+    cuda_device_id: int = 0
+    # Cap the CUDA arena. Every camera worker shares one session, so this is a
+    # process-wide budget. 0 means no cap; set it on a small card (a 4 GB board
+    # driving a desktop has roughly 3.5 GB to give).
+    cuda_mem_limit_mb: int = 0
     # boot: how many cameras auto-start, and the delay between each starting
     # (stagger prevents a memory spike from 30 HEVC decoders at once).
     #   negative -> every camera that has a stream URL

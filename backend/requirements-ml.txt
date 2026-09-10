@@ -1,10 +1,37 @@
 # ANPR stack — install after the core requirements:
 #   pip install -r requirements-ml.txt
 #
-# Lightweight ONNX-based plate detection + OCR (no PyTorch needed, runs on CPU):
+# Lightweight ONNX-based plate detection + OCR (no PyTorch needed):
 fast-plate-ocr[onnx]>=0.3
 open-image-models>=0.2
-onnxruntime>=1.18
+onnx>=1.16                 # used to build the CUDA capability probe graph
+
+# --- pick ONE onnxruntime -----------------------------------------------------
+# CPU only. Works everywhere, no CUDA needed.
+# onnxruntime>=1.18
+#
+# NVIDIA GPU. Roughly 2x the throughput of CPU on this cascade, measured on a
+# GTX 1650. Do NOT install both wheels: they provide the same `onnxruntime`
+# module and whichever was written last wins, which is not something you want
+# decided by install order.
+#
+#   pip uninstall -y onnxruntime
+#   pip install "onnxruntime-gpu[cuda,cudnn]"
+#
+# The [cuda,cudnn] extras pull the matching NVIDIA runtime libraries into the
+# virtualenv, about 2 GB, so no system CUDA Toolkit is required. Check which
+# CUDA major version your onnxruntime-gpu wants (1.29 wants CUDA 13 + cuDNN 9)
+# and that `nvidia-smi` reports a driver at least that new.
+#
+# app/utils/device.py preloads those bundled libraries at startup. Without that
+# step Windows cannot resolve them and the CUDA provider is rejected with an
+# error that reads as though the toolkit is missing.
+onnxruntime-gpu>=1.29
 
 # Optional heavier stack if you want to fine-tune / use custom YOLO weights:
 # ultralytics>=8.2
+#
+# Face recognition for person watchlists needs torch + facenet-pytorch. Install
+# a CUDA build to keep it off the CPU; INFERENCE_DEVICE governs it too.
+# torch --index-url https://download.pytorch.org/whl/cu129
+# facenet-pytorch

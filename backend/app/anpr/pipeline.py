@@ -70,7 +70,10 @@ def available() -> bool:
 
 def load_status() -> str:
     if _plate_detector is not None:
-        return f"loaded (ocr={_ocr_kind}, vehicle={'onnx' if _vehicle_sess else 'MISSING - tiled fallback'})"
+        from ..utils.device import status as device_status
+
+        return (f"loaded on {device_status()} (ocr={_ocr_kind}, "
+                f"vehicle={'onnx' if _vehicle_sess else 'MISSING - tiled fallback'})")
     return _load_error or "not loaded yet"
 
 
@@ -81,26 +84,36 @@ def _ensure_loaded() -> None:
     try:
         from open_image_models import LicensePlateDetector
 
+        from ..utils.device import active_device, onnx_providers
+
+        providers = onnx_providers()
+
         _plate_detector = LicensePlateDetector(
-            detection_model="yolo-v9-t-384-license-plate-end2end", conf_thresh=0.25
+            detection_model="yolo-v9-t-384-license-plate-end2end", conf_thresh=0.25,
+            providers=providers,
         )
 
         if VEHICLE_ONNX.exists():
             import onnxruntime as ort
 
             _vehicle_sess = ort.InferenceSession(
-                str(VEHICLE_ONNX), providers=["CPUExecutionProvider"]
+                str(VEHICLE_ONNX), providers=providers
             )
 
         if AWIROS_ONNX.exists() and AWIROS_DICT.exists():
             from .awiros_ocr import AwirosOCR
 
-            _ocr = AwirosOCR(str(AWIROS_ONNX), str(AWIROS_DICT))
+            _ocr = AwirosOCR(str(AWIROS_ONNX), str(AWIROS_DICT), providers=providers)
             _ocr_kind = "awiros-indian"
         else:
             from fast_plate_ocr import LicensePlateRecognizer
 
-            _ocr = LicensePlateRecognizer("cct-s-v2-global-model")
+            # This one takes its own device argument as well as providers; pass
+            # both so it cannot pick a different device from everything else.
+            _ocr = LicensePlateRecognizer(
+                "cct-s-v2-global-model",
+                device=active_device(), providers=providers,
+            )
             _ocr_kind = "cct-s-v2-global"
         _load_error = None
     except Exception as exc:
