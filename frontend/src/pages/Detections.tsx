@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { ErrorBanner } from '../components/Notice'
 import type { Camera, VehicleRow } from '../api'
-import { CarIcon, RefreshCwIcon } from '../components/Icons'
+import { CarIcon, RefreshCwIcon, SearchIcon } from '../components/Icons'
 
 const TYPES = ['', 'car', 'motorcycle', 'bus', 'truck']
 
@@ -21,6 +21,13 @@ export default function Detections() {
     const m = new Map(cams.map((c) => [c.id, c.name]))
     return (id: number) => m.get(id) ?? `#${id}`
   }, [cams])
+
+  const camLocation = useMemo(() => {
+    const m = new Map(cams.map((c) => [c.id, c.location_name || c.name]))
+    return (id: number) => m.get(id) ?? '—'
+  }, [cams])
+
+  const navigate = useNavigate()
 
   useEffect(() => { api.cameras().then(setCams).catch(() => {}) }, [])
 
@@ -102,54 +109,66 @@ export default function Detections() {
             No vehicle detections matching this filter.
           </div>
         ) : (
+          <div style={{ overflowX: 'auto' }}>
           <table>
             <thead>
               <tr>
-                <th>Detection Time</th>
-                <th>Camera Junction</th>
-                <th>Vehicle Class</th>
-                <th>Plate Number</th>
-                <th>Confidence</th>
-                <th>Evidence Crop</th>
+                <th>Camera / Node Location</th>
+                <th>Timestamp</th>
+                <th>Plate Image</th>
+                <th>Number Plate</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => (
                 <tr key={r.id}>
-                  <td className="mono" style={{ color: 'var(--text-dim)', fontSize: 12 }}>
-                    {new Date(r.ts).toLocaleTimeString()}
-                  </td>
-                  <td style={{ fontWeight: 500 }}>{camName(r.camera_id)}</td>
                   <td>
-                    <span className={`pill ${r.vehicle_type === 'car' ? 'online' : r.vehicle_type === 'motorcycle' ? 'flag' : 'unknown'}`}>
-                      {r.vehicle_type}
-                    </span>
+                    <div style={{ fontWeight: 600 }}>{camName(r.camera_id)}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{camLocation(r.camera_id)}</div>
+                  </td>
+                  <td className="mono" style={{ color: 'var(--text-dim)', fontSize: 12, whiteSpace: 'nowrap' }}>
+                    {new Date(r.ts).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
+                  </td>
+                  <td>
+                    {r.snapshot ? (
+                      <a href={`/snapshots/${r.snapshot}`} target="_blank" rel="noreferrer">
+                        <img src={`/snapshots/${r.snapshot}`} alt={`plate crop ${r.plate || r.id}`} className="thumb" />
+                      </a>
+                    ) : (
+                      <span style={{ color: 'var(--text-dim)' }}>—</span>
+                    )}
                   </td>
                   <td>
                     {r.plate ? (
-                      <Link to={`/trace?plate=${encodeURIComponent(r.plate)}`} className="plate-badge">
+                      <Link to={`/vehicle/${encodeURIComponent(r.plate)}`} className="plate-badge">
                         {r.plate}
                       </Link>
                     ) : (
                       <span style={{ color: 'var(--text-dim)' }}>—</span>
                     )}
                   </td>
-                  <td className="mono" style={{ fontSize: 12 }}>
-                    {r.plate_confidence ? `${(r.plate_confidence * 100).toFixed(0)}%` : '—'}
-                  </td>
                   <td>
-                    {r.snapshot ? (
-                      <a href={`/snapshots/${r.snapshot}`} target="_blank" rel="noreferrer">
-                        <img src={`/snapshots/${r.snapshot}`} alt="" className="thumb" />
-                      </a>
+                    {r.plate ? (
+                      <button
+                        type="button"
+                        className="primary"
+                        style={{ padding: '5px 12px', fontSize: 12 }}
+                        onClick={() => navigate(`/vehicle/${encodeURIComponent(r.plate)}`)}
+                        title={`Trace ${r.plate} — RC + challans`}
+                      >
+                        <SearchIcon size={13} />
+                        Trace Details
+                      </button>
                     ) : (
-                      <span style={{ color: 'var(--text-dim)' }}>—</span>
+                      <span style={{ color: 'var(--text-dim)', fontSize: 12 }}>No plate</span>
                     )}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </>

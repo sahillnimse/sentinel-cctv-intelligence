@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { NavLink, Route, Routes, useNavigate } from 'react-router-dom'
+import { NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { alertSocket, api, auth, can } from './api'
 import type { Role } from './api'
 import { THEMES, useTheme } from './theme'
@@ -10,12 +10,14 @@ import Cameras from './pages/Cameras'
 import Coverage from './pages/Coverage'
 import Federation from './pages/Federation'
 import Trace from './pages/Trace'
+import Vehicle from './pages/Vehicle'
 import Detections from './pages/Detections'
 import Analytics from './pages/Analytics'
 import Watchlist from './pages/Watchlist'
 import Alerts from './pages/Alerts'
 import Fleet from './pages/Fleet'
 import Audit from './pages/Audit'
+import Users from './pages/Users'
 import Login from './pages/Login'
 import {
   ActivityIcon,
@@ -36,6 +38,7 @@ import {
   ShieldIcon,
   ZapIcon,
   VideoIcon,
+  UserIcon,
 } from './components/Icons'
 
 type Item = { to: string; label: string; icon: React.ComponentType<{ size?: number; className?: string }>; need?: Role }
@@ -69,7 +72,12 @@ const SECTIONS: { title: string; items: Item[] }[] = [
   },
   {
     title: 'Governance',
-    items: [{ to: '/audit', label: 'Audit Trail', icon: FileTextIcon }],
+    items: [
+      { to: '/audit', label: 'Audit Trail', icon: FileTextIcon },
+      // Admin-only. The link is hidden for everyone else and the server
+      // refuses the endpoints regardless of what the UI shows.
+      { to: '/users', label: 'Accounts & Access', icon: UserIcon, need: 'admin' },
+    ],
   },
 ]
 
@@ -78,9 +86,9 @@ export default function App() {
   const [unacked, setUnacked] = useState(0)
   const [toast, setToast] = useState<string | null>(null)
   const [timeStr, setTimeStr] = useState('')
-  const [showLoginModal, setShowLoginModal] = useState(false)
   const { theme, setTheme } = useTheme()
   const navigate = useNavigate()
+  const location = useLocation()
 
   // Live time ticker
   useEffect(() => {
@@ -126,10 +134,16 @@ export default function App() {
 
   const handleLoginDone = () => {
     setRole(auth.role())
-    setShowLoginModal(false)
   }
 
   const currentUsername = auth.username() || (role ? 'User' : 'Guest')
+
+  // The sign-in page owns the whole viewport. Rendered inside the shell it sat
+  // in the content column, so its full-bleed background stopped at the sidebar
+  // and the card centred on the column rather than the screen.
+  if (location.pathname === '/login') {
+    return <Login onDone={() => { handleLoginDone(); navigate('/') }} />
+  }
 
   return (
     <div className="shell">
@@ -197,12 +211,12 @@ export default function App() {
             </button>
           ) : (
             <button
-              onClick={() => setShowLoginModal(true)}
+              onClick={() => navigate('/login')}
               className="glow-btn"
               style={{ width: '100%', padding: '6px 10px', fontSize: 12 }}
             >
               <ShieldIcon size={13} />
-              Sign in as Admin
+              Sign in
             </button>
           )}
         </div>
@@ -240,7 +254,7 @@ export default function App() {
             {!role && (
               <button
                 className="primary"
-                onClick={() => setShowLoginModal(true)}
+                onClick={() => navigate('/login')}
                 style={{ padding: '4px 12px', fontSize: 12 }}
               >
                 Sign In
@@ -255,6 +269,7 @@ export default function App() {
             <Route path="/live" element={<LiveWall />} />
             <Route path="/alerts" element={<Alerts onSeen={() => setUnacked(0)} />} />
             <Route path="/trace" element={<Trace />} />
+            <Route path="/vehicle/:plate_number" element={<Vehicle />} />
             <Route path="/detections" element={<Detections />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/watchlist" element={<Watchlist />} />
@@ -263,27 +278,13 @@ export default function App() {
             <Route path="/federation" element={<Federation />} />
             <Route path="/fleet" element={<Fleet />} />
             <Route path="/audit" element={<Audit />} />
-            <Route path="/login" element={<Login onDone={handleLoginDone} />} />
+            <Route path="/users" element={<Users />} />
             <Route path="*" element={<div className="empty">Page not found.</div>} />
           </Routes>
         </main>
       </div>
 
-      {/* Login Modal */}
-      {showLoginModal && (
-        <div
-          className="modal"
-          onClick={() => setShowLoginModal(false)}
-          style={{ padding: 16 }}
-        >
-          <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 380 }}>
-            <Login
-              onDone={handleLoginDone}
-              onClose={() => setShowLoginModal(false)}
-            />
-          </div>
-        </div>
-      )}
+      {/* Login lives at /login as a full-viewport page, not a modal. */}
 
       {toast && (
         <div className="toast" onClick={() => { setToast(null); navigate('/alerts') }}>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api, can } from '../api'
 import { cssVar, useTheme } from '../theme'
 import { ErrorBanner } from '../components/Notice'
@@ -22,9 +22,13 @@ const SAMPLE_PLATES = [
   { plate: 'MH12AB0001', label: 'MH12AB0001 (Pune Transit)' },
 ]
 
+const RTO_SAMPLE_PLATES = ['UP16CD1996', 'GJ01AB1234', 'MH12AB0001']
+
 export default function Trace() {
   const [params, setParams] = useSearchParams()
+  const navigate = useNavigate()
   const [plate, setPlate] = useState(() => params.get('plate') ?? '')
+  const [rtoPlate, setRtoPlate] = useState('')
   const [res, setRes] = useState<TraceResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState<unknown>(null)
@@ -136,6 +140,10 @@ export default function Trace() {
       </div>
 
       <div className="panel">
+        <h3>
+          <CarIcon size={14} />
+          1. Movement trace — route reconstruction
+        </h3>
         <form className="row" onSubmit={search}>
           <div style={{ position: 'relative' }}>
             <input
@@ -166,6 +174,55 @@ export default function Trace() {
                 style={{ fontSize: 11 }}
               >
                 {sp.plate}
+              </button>
+            ))}
+          </div>
+        </form>
+      </div>
+
+      <div className="panel">
+        <h3>
+          <FileTextIcon size={14} />
+          2. RTO &amp; penalty trace — RC + challans
+        </h3>
+        <form
+          className="row"
+          onSubmit={(e) => {
+            e.preventDefault()
+            const p = rtoPlate.trim().toUpperCase().replace(/[\s-]+/g, '')
+            if (p) navigate(`/vehicle/${encodeURIComponent(p)}`)
+          }}
+        >
+          <div style={{ position: 'relative' }}>
+            <input
+              className="mono"
+              placeholder="e.g. UP16CD1996"
+              value={rtoPlate}
+              style={{ width: 240, fontSize: 15, fontWeight: 600, paddingLeft: 34 }}
+              onChange={(e) => setRtoPlate(e.target.value.toUpperCase())}
+              aria-label="Plate for RTO and penalty trace"
+            />
+            <SearchIcon
+              size={16}
+              style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }}
+            />
+          </div>
+
+          <button className="primary" type="submit" disabled={!rtoPlate.trim()}>
+            Trace RTO &amp; Penalties
+          </button>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11.5, color: 'var(--text-dim)' }}>Try Sample:</span>
+            {RTO_SAMPLE_PLATES.map((sp) => (
+              <button
+                key={sp}
+                type="button"
+                className="chip"
+                onClick={() => navigate(`/vehicle/${encodeURIComponent(sp)}`)}
+                style={{ fontSize: 11 }}
+              >
+                {sp}
               </button>
             ))}
           </div>

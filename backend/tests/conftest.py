@@ -35,6 +35,22 @@ def app_client():
 
     from app.main import app
     with TestClient(app) as c:
+        # The seeded starter accounts use the shipped default passwords, which
+        # fail the password policy, so they are flagged must_change_password.
+        # In production that flag confines the session until the password is
+        # changed. Here the seeded accounts stand in for established accounts
+        # with real passwords, so settle the flag once at startup; the forced
+        # path itself is covered by dedicated tests using created accounts.
+        from app.db import SessionLocal
+        from app.models import User
+        db = SessionLocal()
+        try:
+            for row in db.query(User).filter(
+                    User.created_by == "system-bootstrap").all():
+                row.must_change_password = False
+            db.commit()
+        finally:
+            db.close()
         yield c
 
 

@@ -1,0 +1,407 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Cinematic aerial view of a riverside city at dusk with monitored expressway junctions">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#141d38"/>
+      <stop offset="34%" stop-color="#3a2f55"/>
+      <stop offset="58%" stop-color="#8a4a4a"/>
+      <stop offset="76%" stop-color="#e08a4e"/>
+      <stop offset="100%" stop-color="#f6c169"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#fff3d0" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#fff3d0" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="flare" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ffe9b8" stop-opacity="0"/>
+      <stop offset="50%" stop-color="#ffe9b8" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#ffe9b8" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2a6b74"/>
+      <stop offset="35%" stop-color="#1d525c"/>
+      <stop offset="100%" stop-color="#123844"/>
+    </linearGradient>
+    <linearGradient id="sunpath" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffcf7d" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#ffcf7d" stop-opacity="0.05"/>
+    </linearGradient>
+    <linearGradient id="haze" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f2a65a" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#f2a65a" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="lampglow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#ffd98f" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#ffd98f" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="cone" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="asphalt" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#43434b"/>
+      <stop offset="50%" stop-color="#333339"/>
+      <stop offset="100%" stop-color="#26262b"/>
+    </linearGradient>
+    <pattern id="winGrid" width="26" height="32" patternUnits="userSpaceOnUse">
+      <rect x="6" y="7" width="12" height="17" rx="1.5" fill="#1f2940"/>
+    </pattern>
+    <pattern id="winLit" width="78" height="96" patternUnits="userSpaceOnUse">
+      <rect x="6" y="7" width="12" height="17" rx="1.5" fill="#ffd27a" opacity="0.92"/>
+      <rect x="32" y="39" width="12" height="17" rx="1.5" fill="#ffbe5a" opacity="0.7"/>
+      <rect x="58" y="71" width="12" height="17" rx="1.5" fill="#ffe1a1" opacity="0.55"/>
+    </pattern>
+    <filter id="soft" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="9"/>
+    </filter>
+    <filter id="soft4" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4"/>
+    </filter>
+  </defs>
+
+  <!-- dusk sky -->
+  <rect width="1600" height="1000" fill="url(#sky)"/>
+
+  <!-- early stars -->
+  <g fill="#ffffff">
+    <circle cx="120" cy="60" r="1.6" opacity="0.8"/>
+    <circle cx="300" cy="140" r="1.2" opacity="0.5"/>
+    <circle cx="480" cy="70" r="1.8" opacity="0.85">
+      <animate attributeName="opacity" values="0.85;0.25;0.85" dur="3.4s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="640" cy="150" r="1.1" opacity="0.45"/>
+    <circle cx="820" cy="60" r="1.5" opacity="0.7"/>
+    <circle cx="980" cy="130" r="1.2" opacity="0.5"/>
+    <circle cx="1400" cy="70" r="1.7" opacity="0.8">
+      <animate attributeName="opacity" values="0.8;0.2;0.8" dur="4.2s" begin="-1.5s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="1520" cy="160" r="1.1" opacity="0.45"/>
+    <circle cx="210" cy="210" r="1" opacity="0.4"/>
+    <circle cx="740" cy="220" r="1.3" opacity="0.5"/>
+    <circle cx="60" cy="180" r="1" opacity="0.4"/>
+  </g>
+
+  <!-- drifting clouds catching the last light -->
+  <g fill="#e8b48a" opacity="0.5" filter="url(#soft)">
+    <animateTransform attributeName="transform" type="translate" values="0 0; -70 0; 0 0" dur="70s" repeatCount="indefinite"/>
+    <ellipse cx="350" cy="150" rx="150" ry="20"/>
+    <ellipse cx="430" cy="132" rx="100" ry="16"/>
+    <ellipse cx="1050" cy="110" rx="170" ry="18"/>
+    <ellipse cx="1150" cy="94" rx="90" ry="13"/>
+  </g>
+  <g fill="#5a3f5e" opacity="0.55" filter="url(#soft)">
+    <animateTransform attributeName="transform" type="translate" values="0 0; 60 0; 0 0" dur="90s" repeatCount="indefinite"/>
+    <ellipse cx="700" cy="230" rx="220" ry="22"/>
+    <ellipse cx="200" cy="260" rx="150" ry="18"/>
+    <ellipse cx="1420" cy="240" rx="170" ry="20"/>
+  </g>
+
+  <!-- setting sun -->
+  <circle cx="1180" cy="330" r="250" fill="url(#sun)">
+    <animate attributeName="opacity" values="1;0.8;1" dur="7s" repeatCount="indefinite"/>
+  </circle>
+  <rect x="880" y="327" width="600" height="5" fill="url(#flare)" opacity="0.7"/>
+  <circle cx="1180" cy="330" r="42" fill="#fff3cf" opacity="0.95"/>
+
+  <!-- distant birds -->
+  <g fill="none" stroke="#2c2340" stroke-width="2.5" stroke-linecap="round" opacity="0.8">
+    <path d="M520 250 q7 -7 14 0 q7 -7 14 0">
+      <animateTransform attributeName="transform" type="translate" values="0 0; 0 8; 0 0" dur="5s" repeatCount="indefinite"/>
+    </path>
+    <path d="M580 272 q6 -6 12 0 q6 -6 12 0">
+      <animateTransform attributeName="transform" type="translate" values="0 0; 0 -7; 0 0" dur="6s" begin="-2s" repeatCount="indefinite"/>
+    </path>
+    <path d="M1330 250 q6 -6 12 0 q6 -6 12 0"/>
+  </g>
+
+  <!-- far skyline silhouette -->
+  <g fill="#33395a">
+    <rect x="0" y="330" width="70" height="110"/>
+    <rect x="90" y="300" width="54" height="140"/>
+    <rect x="160" y="340" width="88" height="100"/>
+    <rect x="270" y="290" width="46" height="150"/>
+    <rect x="330" y="330" width="90" height="110"/>
+    <rect x="450" y="305" width="58" height="135"/>
+    <rect x="530" y="345" width="100" height="95"/>
+    <rect x="660" y="295" width="50" height="145"/>
+    <rect x="730" y="335" width="92" height="105"/>
+    <rect x="850" y="310" width="56" height="130"/>
+    <rect x="930" y="345" width="104" height="95"/>
+    <rect x="1290" y="300" width="58" height="140"/>
+    <rect x="1370" y="340" width="96" height="100"/>
+    <rect x="1490" y="315" width="60" height="125"/>
+    <rect x="200" y="252" width="5" height="50"/>
+    <rect x="684" y="258" width="5" height="42"/>
+    <rect x="1314" y="262" width="5" height="44"/>
+  </g>
+  <!-- aircraft warning beacons -->
+  <circle cx="202" cy="250" r="3.5" fill="#ff4d4d">
+    <animate attributeName="opacity" values="1;0.1;1" dur="1.8s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="1316" cy="260" r="3.5" fill="#ff4d4d">
+    <animate attributeName="opacity" values="1;0.1;1" dur="1.8s" begin="-0.9s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- mid skyline with windows -->
+  <g>
+    <g fill="#454a68">
+      <rect x="30" y="360" width="96" height="100" rx="2"/>
+      <rect x="150" y="340" width="72" height="120" rx="2"/>
+      <rect x="250" y="368" width="110" height="92" rx="2"/>
+      <rect x="390" y="348" width="66" height="112" rx="2"/>
+      <rect x="480" y="366" width="104" height="94" rx="2"/>
+      <rect x="620" y="344" width="74" height="116" rx="2"/>
+      <rect x="720" y="368" width="108" height="92" rx="2"/>
+      <rect x="860" y="346" width="68" height="114" rx="2"/>
+      <rect x="950" y="366" width="112" height="94" rx="2"/>
+      <rect x="1090" y="342" width="76" height="118" rx="2"/>
+      <rect x="1195" y="368" width="110" height="92" rx="2"/>
+      <rect x="1330" y="344" width="70" height="116" rx="2"/>
+      <rect x="1430" y="366" width="120" height="94" rx="2"/>
+    </g>
+    <g>
+      <rect x="30" y="360" width="96" height="100" fill="url(#winGrid)"/>
+      <rect x="150" y="340" width="72" height="120" fill="url(#winGrid)"/>
+      <rect x="250" y="368" width="110" height="92" fill="url(#winGrid)"/>
+      <rect x="390" y="348" width="66" height="112" fill="url(#winGrid)"/>
+      <rect x="480" y="366" width="104" height="94" fill="url(#winGrid)"/>
+      <rect x="620" y="344" width="74" height="116" fill="url(#winGrid)"/>
+      <rect x="720" y="368" width="108" height="92" fill="url(#winGrid)"/>
+      <rect x="860" y="346" width="68" height="114" fill="url(#winGrid)"/>
+      <rect x="950" y="366" width="112" height="94" fill="url(#winGrid)"/>
+      <rect x="1090" y="342" width="76" height="118" fill="url(#winGrid)"/>
+      <rect x="1195" y="368" width="110" height="92" fill="url(#winGrid)"/>
+      <rect x="1330" y="344" width="70" height="116" fill="url(#winGrid)"/>
+      <rect x="1430" y="366" width="120" height="94" fill="url(#winGrid)"/>
+    </g>
+    <g>
+      <rect x="150" y="340" width="72" height="120" fill="url(#winLit)"/>
+      <rect x="480" y="366" width="104" height="94" fill="url(#winLit)"/>
+      <rect x="860" y="346" width="68" height="114" fill="url(#winLit)"/>
+      <rect x="1195" y="368" width="110" height="92" fill="url(#winLit)"/>
+      <rect x="390" y="348" width="66" height="112" fill="url(#winLit)" opacity="0.7"/>
+      <rect x="1090" y="342" width="76" height="118" fill="url(#winLit)" opacity="0.7"/>
+    </g>
+    <!-- one apartment flickering its TV light -->
+    <rect x="656" y="383" width="12" height="17" rx="1.5" fill="#cfe6ff">
+      <animate attributeName="opacity" values="0.9;0.15;0.9;0.4;0.9" dur="5s" repeatCount="indefinite"/>
+    </rect>
+    <!-- rooftop tanks and AC boxes -->
+    <g fill="#383d5c">
+      <rect x="52" y="348" width="26" height="12" rx="2"/>
+      <rect x="500" y="354" width="30" height="12" rx="2"/>
+      <rect x="880" y="334" width="24" height="12" rx="2"/>
+      <rect x="1215" y="356" width="28" height="12" rx="2"/>
+      <rect x="1450" y="354" width="26" height="12" rx="2"/>
+    </g>
+  </g>
+
+  <rect y="380" width="1600" height="120" fill="url(#haze)"/>
+
+  <!-- near commercial blocks with shopfront glow -->
+  <g>
+    <rect x="0" y="460" width="1600" height="190" fill="#5c4a52"/>
+    <g fill="#8a5f52">
+      <rect x="24" y="470" width="118" height="72" rx="4"/>
+      <rect x="322" y="472" width="126" height="70" rx="4"/>
+      <rect x="642" y="468" width="120" height="74" rx="4"/>
+      <rect x="962" y="472" width="130" height="70" rx="4"/>
+      <rect x="1286" y="470" width="122" height="72" rx="4"/>
+    </g>
+    <g fill="#4f7a68">
+      <rect x="166" y="474" width="112" height="68" rx="4"/>
+      <rect x="486" y="470" width="118" height="72" rx="4"/>
+      <rect x="800" y="474" width="112" height="68" rx="4"/>
+      <rect x="1120" y="468" width="120" height="74" rx="4"/>
+      <rect x="1440" y="474" width="130" height="68" rx="4"/>
+    </g>
+    <!-- glowing shopfront strips -->
+    <g fill="#ffd98f" opacity="0.85">
+      <rect x="34" y="522" width="98" height="10" rx="2"/>
+      <rect x="332" y="522" width="106" height="10" rx="2"/>
+      <rect x="652" y="522" width="100" height="10" rx="2"/>
+      <rect x="972" y="522" width="110" height="10" rx="2"/>
+      <rect x="1296" y="522" width="102" height="10" rx="2"/>
+    </g>
+    <g fill="#d9a05a">
+      <rect x="60" y="560" width="150" height="70" rx="4"/>
+      <rect x="400" y="562" width="140" height="68" rx="4"/>
+      <rect x="740" y="560" width="152" height="70" rx="4"/>
+      <rect x="1080" y="562" width="142" height="68" rx="4"/>
+      <rect x="1400" y="560" width="150" height="70" rx="4"/>
+    </g>
+    <g fill="#5a7f95">
+      <rect x="240" y="564" width="128" height="64" rx="4"/>
+      <rect x="576" y="562" width="132" height="68" rx="4"/>
+      <rect x="922" y="564" width="126" height="64" rx="4"/>
+      <rect x="1256" y="562" width="130" height="68" rx="4"/>
+    </g>
+    <g fill="#ffe9b8" opacity="0.5">
+      <rect x="250" y="576" width="108" height="8" rx="2"/>
+      <rect x="586" y="574" width="112" height="8" rx="2"/>
+      <rect x="932" y="576" width="106" height="8" rx="2"/>
+      <rect x="1266" y="574" width="110" height="8" rx="2"/>
+    </g>
+    <rect x="0" y="540" width="1600" height="14" fill="#000000" opacity="0.22"/>
+  </g>
+
+  <!-- riverside expressway -->
+  <path d="M0 668 C 260 620, 430 718, 700 690 C 960 662, 1180 748, 1600 716 L1600 762 C 1180 794, 960 708, 700 736 C 430 764, 260 666, 0 714 Z" fill="url(#asphalt)"/>
+  <path d="M0 668 C 260 620, 430 718, 700 690 C 960 662, 1180 748, 1600 716"
+        fill="none" stroke="#f4e9cf" stroke-width="2.5" stroke-dasharray="22 26" opacity="0.8"/>
+  <path d="M0 706 C 260 658, 430 756, 700 728 C 960 700, 1180 786, 1600 754"
+        fill="none" stroke="#e8b06a" stroke-width="3" stroke-dasharray="8 30" opacity="0.55"/>
+  <!-- parked traffic -->
+  <g fill="#e9e2d2">
+    <rect x="120" y="648" width="20" height="10" rx="2.5" transform="rotate(-9 130 653)"/>
+    <rect x="560" y="706" width="20" height="10" rx="2.5" transform="rotate(-3 570 711)"/>
+  </g>
+  <g fill="#c25a3f">
+    <rect x="226" y="658" width="18" height="9" rx="2.5" transform="rotate(-6 235 662)"/>
+    <rect x="1150" y="716" width="18" height="9" rx="2.5" transform="rotate(6 1159 720)"/>
+  </g>
+  <!-- live traffic with headlight beams -->
+  <g>
+    <g>
+      <polygon points="11,-3 52,-9 52,3 11,4" fill="#fff6cf" opacity="0.3"/>
+      <rect x="-11" y="-5" width="22" height="10" rx="2.5" fill="#f2ecdc"/>
+      <animateMotion dur="12s" repeatCount="indefinite" rotate="auto" path="M0 668 C 260 620, 430 718, 700 690 C 960 662, 1180 748, 1600 716"/>
+    </g>
+    <g>
+      <polygon points="11,-3 48,-8 48,2 11,4" fill="#fff6cf" opacity="0.3"/>
+      <rect x="-10" y="-4.5" width="18" height="9" rx="2.5" fill="#d97a4e"/>
+      <circle cx="-11" cy="-2.5" r="1.6" fill="#ff3b30"/>
+      <circle cx="-11" cy="2.5" r="1.6" fill="#ff3b30"/>
+      <animateMotion dur="17s" begin="-6s" repeatCount="indefinite" rotate="auto" path="M1600 740 C 1180 772, 960 686, 700 714 C 430 742, 260 644, 0 692"/>
+    </g>
+    <g>
+      <polygon points="11,-3 52,-9 52,3 11,4" fill="#fff6cf" opacity="0.3"/>
+      <rect x="-11" y="-5" width="22" height="10" rx="2.5" fill="#dfe6ea"/>
+      <animateMotion dur="14s" begin="-9s" repeatCount="indefinite" rotate="auto" path="M0 668 C 260 620, 430 718, 700 690 C 960 662, 1180 748, 1600 716"/>
+    </g>
+  </g>
+
+  <!-- street lamps with warm pools -->
+  <g>
+    <g transform="translate(210 640)">
+      <ellipse cx="30" cy="46" rx="46" ry="10" fill="url(#lampglow)"/>
+      <rect x="-2" y="-40" width="4" height="82" fill="#2c2c33"/>
+      <rect x="-2" y="-40" width="34" height="4" fill="#2c2c33"/>
+      <circle cx="32" cy="-34" r="4" fill="#ffe2a0"/>
+    </g>
+    <g transform="translate(700 668)">
+      <ellipse cx="30" cy="48" rx="46" ry="10" fill="url(#lampglow)"/>
+      <rect x="-2" y="-40" width="4" height="84" fill="#2c2c33"/>
+      <rect x="-2" y="-40" width="34" height="4" fill="#2c2c33"/>
+      <circle cx="32" cy="-34" r="4" fill="#ffe2a0"/>
+    </g>
+    <g transform="translate(1210 706)">
+      <ellipse cx="30" cy="48" rx="46" ry="10" fill="url(#lampglow)"/>
+      <rect x="-2" y="-40" width="4" height="84" fill="#2c2c33"/>
+      <rect x="-2" y="-40" width="34" height="4" fill="#2c2c33"/>
+      <circle cx="32" cy="-34" r="4" fill="#ffe2a0"/>
+    </g>
+  </g>
+
+  <!-- signal gantry over the expressway -->
+  <g transform="translate(1010 640)">
+    <rect x="0" y="0" width="6" height="86" fill="#33333b"/>
+    <rect x="120" y="6" width="6" height="80" fill="#33333b"/>
+    <rect x="0" y="0" width="126" height="10" rx="2" fill="#33333b"/>
+    <rect x="48" y="10" width="30" height="52" rx="5" fill="#1d1d22"/>
+    <circle cx="63" cy="22" r="6" fill="#3a3a42"/>
+    <circle cx="63" cy="36" r="6" fill="#3a3a42"/>
+    <circle cx="63" cy="50" r="6" fill="#37d67a">
+      <animate attributeName="opacity" values="1;0.55;1" dur="2.2s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="63" cy="50" r="12" fill="#37d67a" opacity="0.25" filter="url(#soft4)"/>
+  </g>
+
+  <!-- monitored junctions: pole-mounted CCTV with blinking LEDs -->
+  <g>
+    <g transform="translate(300 540)">
+      <rect x="-2.5" y="0" width="5" height="52" fill="#23262e"/>
+      <rect x="-12" y="-16" width="24" height="12" rx="3" fill="#23262e"/>
+      <circle cx="8" cy="-10" r="2.4" fill="#ff3b30">
+        <animate attributeName="opacity" values="1;0.15;1" dur="1.4s" repeatCount="indefinite"/>
+      </circle>
+      <path d="M0 -16 L-64 -90 L64 -90 Z" fill="url(#cone)"/>
+      <circle cx="0" cy="-16" r="13" fill="none" stroke="#eaf2f5" stroke-opacity="0.4" stroke-width="2"/>
+      <circle r="13" cx="0" cy="-16" fill="none" stroke="#eaf2f5" stroke-width="2">
+        <animate attributeName="r" values="13;28" dur="2.8s" repeatCount="indefinite"/>
+        <animate attributeName="stroke-opacity" values="0.5;0" dur="2.8s" repeatCount="indefinite"/>
+      </circle>
+    </g>
+    <g transform="translate(860 522)">
+      <rect x="-2.5" y="0" width="5" height="52" fill="#23262e"/>
+      <rect x="-12" y="-16" width="24" height="12" rx="3" fill="#23262e"/>
+      <circle cx="8" cy="-10" r="2.4" fill="#ff3b30">
+        <animate attributeName="opacity" values="1;0.15;1" dur="1.4s" begin="-0.7s" repeatCount="indefinite"/>
+      </circle>
+      <path d="M0 -16 L-58 -84 L58 -84 Z" fill="url(#cone)"/>
+      <circle cx="0" cy="-16" r="13" fill="none" stroke="#eaf2f5" stroke-opacity="0.4" stroke-width="2"/>
+      <circle r="13" cx="0" cy="-16" fill="none" stroke="#eaf2f5" stroke-width="2">
+        <animate attributeName="r" values="13;28" dur="2.8s" begin="-0.9s" repeatCount="indefinite"/>
+        <animate attributeName="stroke-opacity" values="0.5;0" dur="2.8s" begin="-0.9s" repeatCount="indefinite"/>
+      </circle>
+    </g>
+    <g transform="translate(1330 546)">
+      <rect x="-2.5" y="0" width="5" height="52" fill="#23262e"/>
+      <rect x="-12" y="-16" width="24" height="12" rx="3" fill="#23262e"/>
+      <circle cx="8" cy="-10" r="2.4" fill="#ff3b30">
+        <animate attributeName="opacity" values="1;0.15;1" dur="1.4s" begin="-0.3s" repeatCount="indefinite"/>
+      </circle>
+      <path d="M0 -16 L-60 -88 L60 -88 Z" fill="url(#cone)"/>
+      <circle cx="0" cy="-16" r="13" fill="none" stroke="#eaf2f5" stroke-opacity="0.4" stroke-width="2"/>
+      <circle r="13" cx="0" cy="-16" fill="none" stroke="#eaf2f5" stroke-width="2">
+        <animate attributeName="r" values="13;28" dur="2.8s" begin="-1.8s" repeatCount="indefinite"/>
+        <animate attributeName="stroke-opacity" values="0.5;0" dur="2.8s" begin="-1.8s" repeatCount="indefinite"/>
+      </circle>
+    </g>
+  </g>
+
+  <!-- river with sun glitter -->
+  <path d="M0 730 C 260 682, 430 780, 700 752 C 960 724, 1180 810, 1600 778 L1600 1000 L0 1000 Z" fill="url(#water)"/>
+  <path d="M0 730 C 260 682, 430 780, 700 752 C 960 724, 1180 810, 1600 778"
+        fill="none" stroke="#ffffff" stroke-opacity="0.3" stroke-width="3"/>
+  <g>
+    <rect x="1148" y="740" width="64" height="260" fill="url(#sunpath)">
+      <animate attributeName="opacity" values="0.85;1;0.85" dur="4s" repeatCount="indefinite"/>
+    </rect>
+    <g fill="#ffd98f" opacity="0.5">
+      <animateTransform attributeName="transform" type="translate" values="-14 0; 14 0; -14 0" dur="7s" repeatCount="indefinite"/>
+      <rect x="1152" y="770" width="56" height="5" rx="2.5"/>
+      <rect x="1158" y="800" width="44" height="5" rx="2.5"/>
+      <rect x="1150" y="832" width="60" height="6" rx="3"/>
+      <rect x="1160" y="868" width="40" height="5" rx="2.5"/>
+      <rect x="1154" y="906" width="52" height="6" rx="3"/>
+    </g>
+  </g>
+  <g fill="#ffffff" opacity="0.14">
+    <animateTransform attributeName="transform" type="translate" values="-26 0; 26 0; -26 0" dur="16s" repeatCount="indefinite"/>
+    <ellipse cx="300" cy="820" rx="120" ry="7"/>
+    <ellipse cx="820" cy="880" rx="170" ry="8"/>
+    <ellipse cx="1320" cy="850" rx="140" ry="7"/>
+    <ellipse cx="560" cy="950" rx="200" ry="9"/>
+  </g>
+
+  <!-- foreground bank with railing -->
+  <path d="M0 948 C 300 912, 700 978, 1100 942 C 1320 924, 1460 954, 1600 940 L1600 1000 L0 1000 Z" fill="#22303a"/>
+  <g stroke="#3d4c58" stroke-width="4">
+    <line x1="0" y1="940" x2="1600" y2="934"/>
+  </g>
+  <g fill="#3d4c58">
+    <rect x="120" y="918" width="5" height="34"/>
+    <rect x="320" y="920" width="5" height="34"/>
+    <rect x="520" y="922" width="5" height="34"/>
+    <rect x="720" y="922" width="5" height="34"/>
+    <rect x="920" y="920" width="5" height="34"/>
+    <rect x="1120" y="918" width="5" height="34"/>
+    <rect x="1320" y="916" width="5" height="34"/>
+    <rect x="1500" y="916" width="5" height="34"/>
+  </g>
+  <g fill="#1b2a24" opacity="0.9">
+    <ellipse cx="220" cy="972" rx="90" ry="18"/>
+    <ellipse cx="800" cy="982" rx="130" ry="20"/>
+    <ellipse cx="1380" cy="974" rx="100" ry="18"/>
+  </g>
+</svg>

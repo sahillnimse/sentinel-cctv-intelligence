@@ -23,20 +23,57 @@ class TestRoleRanking:
 
 
 class TestAuthenticate:
-    def test_valid_admin(self):
-        assert authenticate("admin", "admin123") == "admin"
+    """Credentials are checked against the users table, not against env vars.
 
-    def test_valid_viewer(self):
-        assert authenticate("viewer", "viewer123") == "viewer"
+    The seeded accounts exist because the app bootstraps an empty database with
+    them; app_client is required so that seeding has run.
+    """
 
-    def test_wrong_password(self):
-        assert authenticate("admin", "wrong") is None
+    @pytest.fixture(autouse=True)
+    def db(self, app_client):
+        from app.db import SessionLocal
+        session = SessionLocal()
+        yield session
+        session.close()
 
-    def test_unknown_user(self):
-        assert authenticate("nobody", "admin123") is None
+    def test_valid_admin(self, db):
+        user = authenticate(db, "admin", "admin123")
+        assert user is not None and user.role == "admin"
 
-    def test_empty_password(self):
-        assert authenticate("admin", "") is None
+    def test_valid_viewer(self, db):
+        user = authenticate(db, "viewer", "viewer123")
+        assert user is not None and user.role == "viewer"
+
+    def test_wrong_password(self, db):
+        assert authenticate(db, "admin", "wrong") is None
+
+    def test_unknown_user(self, db):
+        assert authenticate(db, "nobody", "admin123") is None
+
+    def test_empty_password(self, db):
+        assert authenticate(db, "admin", "") is None
+
+    def test_inactive_account_cannot_sign_in(self, db):
+        """A deactivated account must fail exactly like a wrong password, and
+        must not be distinguishable from one."""
+        from app.models import User
+
+        user = db.query(User).filter(User.username == "viewer").first()
+        assert user is not None
+        user.active = False
+        db.commit()
+        try:
+            assert authenticate(db, "viewer", "viewer123") is None
+        finally:
+            user.active = True
+            db.commit()
+
+    def test_passwords_are_not_stored_in_plaintext(self, db):
+        from app.models import User
+
+        for user in db.query(User).all():
+            assert user.password_hash.startswith("pbkdf2_sha256$")
+            assert "admin123" not in user.password_hash
 
 
 class TestTokens:

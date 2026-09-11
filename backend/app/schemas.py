@@ -119,3 +119,51 @@ class TokenOut(BaseModel):
     access_token: str
     token_type: str = "bearer"
     role: str = "viewer"
+
+
+# --- user administration ----------------------------------------------------
+
+class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    username: str
+    role: str
+    full_name: str = ""
+    badge_no: str = ""
+    active: bool = True
+    must_change_password: bool = False
+    created_at: datetime
+    created_by: str = ""
+    last_login_at: datetime | None = None
+    # Deliberately no password_hash. A response model is the last place that
+    # can leak one, and "it is only a hash" is not a reason to ship it.
+
+
+class UserCreate(BaseModel):
+    username: str
+    role: str = "viewer"
+    full_name: str = ""
+    badge_no: str = ""
+    # Optional: omit it and the server generates a temporary one, which is the
+    # safer default because it is never typed, mailed or reused from elsewhere.
+    password: str | None = None
+
+
+class UserUpdate(BaseModel):
+    """Every field optional — a PATCH changes only what it names."""
+    role: str | None = None
+    full_name: str | None = None
+    badge_no: str | None = None
+    active: bool | None = None
+
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class TempPasswordOut(BaseModel):
+    """Returned once, on create or reset. Never retrievable afterwards."""
+    user: UserOut
+    temporary_password: str
+    note: str = ("Shown once. The account must change it at next sign-in.")

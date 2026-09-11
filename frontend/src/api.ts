@@ -50,6 +50,41 @@ export type TraceResult = {
   watchlist_reason: string
 }
 
+export type ChallanItem = {
+  challan_number: string
+  offense: string
+  offense_date: string
+  location: string
+  amount: number
+  status: string
+}
+
+export type ChallanSummary = {
+  pending_count: number
+  pending_amount: number
+  total_count: number
+}
+
+export type VehicleTraceResult = {
+  plate: string
+  rc: {
+    ok: boolean
+    mocked?: boolean
+    payload?: any
+    error?: { code: string; message: string }
+  }
+  challans: {
+    ok: boolean
+    mocked?: boolean
+    error?: { code: string; message: string }
+    notice?: string
+    items: ChallanItem[]
+    summary: ChallanSummary
+    raw_status?: boolean | null
+  }
+  meta: { mocked: boolean; duration_ms: number; live: boolean }
+}
+
 export type WatchlistEntry = {
   id: number
   plate: string
@@ -144,6 +179,36 @@ export type WorkerStatus = {
 
 /** Outcome of Start All, split so the operator is told what actually happened
  *  rather than just how many workers were newly created. */
+export type AppUser = {
+  id: number
+  username: string
+  role: Role
+  full_name: string
+  badge_no: string
+  active: boolean
+  must_change_password: boolean
+  created_at: string
+  created_by: string
+  last_login_at: string | null
+}
+
+/** Returned once, on create or password reset. Never retrievable afterwards. */
+export type TempPassword = {
+  user: AppUser
+  temporary_password: string
+  note: string
+}
+
+export type Session = {
+  access_token: string
+  token_type: string
+  role: Role
+  username: string
+  full_name: string
+  must_change_password: boolean
+  note?: string
+}
+
 export type StartAllResult = {
   started: number[]
   already_running: number[]
@@ -273,12 +338,16 @@ export class ApiError extends Error {
   kind: ErrorKind
   /** Minimum role the server asked for, when it told us. */
   requiredRole?: Role
+  /** True when the session is confined until the temporary password changes. */
+  passwordChangeRequired?: boolean
 
-  constructor(status: number, message: string, kind: ErrorKind, requiredRole?: Role) {
+  constructor(status: number, message: string, kind: ErrorKind, requiredRole?: Role,
+              passwordChangeRequired?: boolean) {
     super(message)
     this.status = status
     this.kind = kind
     this.requiredRole = requiredRole
+    this.passwordChangeRequired = passwordChangeRequired
   }
 
   /** True when this is a policy refusal rather than something going wrong. */
@@ -338,14 +407,22 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     let detail = `${res.status} ${res.statusText}`
+    let passwordChangeRequired = false
     try {
       const body = await res.json()
       if (body?.detail) {
         detail = typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail)
       }
+      passwordChangeRequired = body?.must_change_password === true
     } catch { /* non-JSON error body */ }
 
     if (res.status === 403) {
+      // A session on a temporary password is confined until it is changed.
+      // Report the server's message verbatim instead of the generic
+      // permission sentence — this is a state, not a role.
+      if (passwordChangeRequired) {
+        throw new ApiError(403, detail, 'permission', undefined, true)
+      }
       const [message, need] = permissionMessage(detail)
       throw new ApiError(403, message, 'permission', need)
     }
@@ -371,13 +448,31 @@ export function isAccessError(e: unknown): boolean {
 
 export const api = {
   login: (username: string, password: string) =>
-    req<{ access_token: string; role: Role }>('/api/auth/login', {
+    req<Session>('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({ username, password }),
     }),
   logout: () => req<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }),
   me: () => req<{ username: string; role: Role; exp: number }>('/api/auth/me'),
   audit: (limit = 200) => req<AuditRow[]>(`/api/auth/audit?limit=${limit}`),
+
+  // --- accounts (admin, except the last two) ---
+  users: () => req<AppUser[]>('/api/users'),
+  createUser: (body: {
+    username: string; role: Role; full_name?: string; badge_no?: string; password?: string
+  }) => req<TempPassword>('/api/users', { method: 'POST', body: JSON.stringify(body) }),
+  updateUser: (id: number, body: Partial<Pick<AppUser, 'role' | 'full_name' | 'badge_no' | 'active'>>) =>
+    req<AppUser>(`/api/users/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deactivateUser: (id: number) =>
+    req<{ deactivated: string; id: number; note: string }>(`/api/users/${id}`, { method: 'DELETE' }),
+  resetUserPassword: (id: number) =>
+    req<TempPassword>(`/api/users/${id}/reset-password`, { method: 'POST' }),
+  myProfile: () => req<AppUser>('/api/users/me'),
+  changeOwnPassword: (current_password: string, new_password: string) =>
+    req<Session>('/api/users/me/password', {
+      method: 'POST',
+      body: JSON.stringify({ current_password, new_password }),
+    }),
 
   summary: (minutes = 60) => req<Summary>(`/api/analytics/summary?minutes=${minutes}`),
   gapAnalysis: (cellKm = 2, reachKm = 1.5) =>
@@ -426,6 +521,14 @@ export const api = {
   ackAlert: (id: number) => req<unknown>(`/api/alerts/${id}/ack`, { method: 'POST' }),
 
   vahan: (plate: string) => req<any>(`/api/vahan/${encodeURIComponent(plate)}`),
+  vehicleTrace: (plate: string) =>
+    req<VehicleTraceResult>(`/api/vehicle/${encodeURIComponent(plate)}/trace`),
+  vehicleRc: (plate: string) =>
+    req<{ plate: string; ok: boolean; mocked?: boolean; payload?: any; error?: { code: string; message: string } }>(
+      `/api/vehicle/${encodeURIComponent(plate)}/rc`),
+  vehicleChallans: (plate: string) =>
+    req<{ plate: string; ok: boolean; mocked?: boolean; error?: { code: string; message: string }; items: ChallanItem[]; summary: ChallanSummary }>(
+      `/api/vehicle/${encodeURIComponent(plate)}/challans`),
   copilotStatus: () => req<{ configured: boolean; model: string }>('/api/copilot/status'),
   seedDemo: (plate = 'GJ01AB1234', count = 6) =>
     req<{ plate: string; cameras: string[]; sightings_created: number; alert_id: number | null }>(

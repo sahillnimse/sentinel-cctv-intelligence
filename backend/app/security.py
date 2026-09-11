@@ -117,6 +117,31 @@ def issue_token(username: str, role: str, *, uid: int | None = None,
     )
 
 
+def session_state(db, claims: dict | None) -> str:
+    """Classify a session: 'ok', 'revoked', or 'must_change_password'.
+
+    The last one exists because a forced password change enforced only in the
+    UI is decoration. The account could skip the screen and drive the API with
+    its temporary password for as long as the token lasted, which is exactly
+    the window the forced change is meant to close.
+    """
+    from .models import User
+
+    if not session_is_current(db, claims):
+        return "revoked"
+    if claims.get("sub") == "edge":
+        return "ok"
+
+    user = None
+    if claims.get("uid") is not None:
+        user = db.get(User, claims["uid"])
+    if user is None:
+        user = db.query(User).filter(User.username == claims.get("sub", "")).first()
+    if user is not None and user.must_change_password:
+        return "must_change_password"
+    return "ok"
+
+
 def session_is_current(db, claims: dict | None) -> bool:
     """Is the account behind these claims still entitled to this session?
 
@@ -222,6 +247,9 @@ DEFAULT_MUTATION_ROLE = "operator"
 READ_ROLES = {
     "/api/auth/audit": "admin",
     "/api/users": "admin",
+    # Longest prefix wins, so reading your own profile stays open to any
+    # signed-in account while the roster stays admin-only.
+    "/api/users/me": "viewer",
 }
 
 

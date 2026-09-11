@@ -89,7 +89,12 @@ npm run dev
 http://localhost:5173, proxying `/api` and `/snapshots` to the backend.
 
 Sign in with `admin` / `admin123` (see `.env.example` for the operator and
-viewer accounts). Change these before any deployment.
+viewer accounts). The shipped passwords fail the password policy, so the first
+sign-in forces a change before the console is usable — that gate is enforced by
+the API, not just the login screen. Administrators then manage real accounts
+(shifts of operators, viewers) under **Accounts & Access**, including revoking
+access and issuing temporary passwords. Change the seed passwords and set a
+real `JWT_SECRET` before any deployment.
 
 ### Tests
 
@@ -98,7 +103,9 @@ cd backend
 .venv\Scripts\python -m pytest
 ```
 
-239 tests covering plate matching, RBAC, credential redaction, the edge spool, and the API end to end.
+266 tests covering plate matching, RBAC, credential redaction, account
+administration with forced password changes, the edge spool, and the API end
+to end.
 
 ---
 

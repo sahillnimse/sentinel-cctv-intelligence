@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     # Mutating /api calls always require a token. Reads also require a token
     # unless this is set false (closed-network sandbox only).
     auth_enforce_reads: bool = True
+    # Mark the session cookie Secure so browsers only send it over HTTPS. Must
+    # be false for plain-HTTP local development, where a Secure cookie is never
+    # sent at all and every request looks unauthenticated. Turn it on for any
+    # deployment that terminates TLS.
+    cookie_secure: bool = False
     sample_interval_ms: int = 400
     min_plate_confidence: float = 0.5
     # Where the models run: auto | cuda | cpu.
@@ -100,6 +105,17 @@ class Settings(BaseSettings):
     openrouter_api_key: str = ""
     openrouter_model: str = "anthropic/claude-sonnet-4.5"
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
+
+    # --- vehicle RTO / challan trace (RapidAPI) ---------------------------
+    # Keys never leave the server: the frontend calls /api/vehicle/* and the
+    # backend fans out to RapidAPI. Quotes are stripped so both
+    # RAPIDAPI_KEY=abc and RAPIDAPI_KEY="abc" work.
+    rapidapi_key: str = ""
+    rapidapi_host: str = ""
+    rapidapi_challan_host: str = ""
+    rapidapi_rc_path: str = "/getVehicleInfo"
+    rapidapi_challan_path: str = "/getChallans"
+    rapidapi_timeout_s: float = 10.0
 
     class Config:
         env_file = BASE_DIR / ".env"

@@ -12,11 +12,11 @@ from . import ws
 from .anpr.worker import start_worker, stop_all
 from .config import settings
 from .db import engine
-from .models import Base, Camera, has_stream
+from .models import Base, Camera, User, has_stream
 from .db import SessionLocal
 from .routers import (adapters, alerts, analytics, auth, cameras, copilot, demo,
                       edge, evidence, fleet, integrations, ops, reports,
-                      sightings, streams, vahan, vehicles, watchlist)
+                      sightings, streams, users, vahan, vehicle_trace, vehicles, watchlist)
 
 log = logging.getLogger("sentinel")
 logging.basicConfig(level=logging.INFO)
@@ -161,10 +161,48 @@ def _autostart_workers():
     threading.Thread(target=stagger, name="autostart", daemon=True).start()
 
 
+def _seed_accounts():
+    """Create the starter accounts on an empty users table.
+
+    Only ever runs when the table has no rows. Once a deployment manages its
+    own accounts, editing ADMIN_PASSWORD in .env must not resurrect or alter
+    anything, and deleting a seeded account must not bring it back on restart.
+    """
+    from .security import bootstrap_users
+    from .utils import passwords
+
+    db = SessionLocal()
+    try:
+        if db.query(User).count() > 0:
+            return
+        seeded = []
+        for username, (password, role) in bootstrap_users().items():
+            db.add(User(
+                username=username.strip().lower(),
+                password_hash=passwords.hash_password(password),
+                role=role,
+                full_name=f"Seed {role}",
+                active=True,
+                # The shipped defaults are public knowledge, so an account
+                # still using one is required to change it at first sign-in.
+                must_change_password=passwords.policy_error(password) is not None,
+                created_by="system-bootstrap",
+            ))
+            seeded.append(f"{username}({role})")
+        db.commit()
+        if seeded:
+            log.warning("seeded starter accounts: %s — sign in and change these "
+                        "passwords, then create real accounts under Users",
+                        ", ".join(seeded))
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(engine)
     _migrate()
+    _seed_accounts()
     ws.set_loop(asyncio.get_running_loop())
     from . import edge as edge_tier
     edge_tier.start()
@@ -194,6 +232,16 @@ app.add_middleware(
 
 READ_METHODS = {"GET", "HEAD", "OPTIONS"}
 
+# While an account is flagged for a forced password change, these are the only
+# calls its session may make: change the password, read its own profile, or
+# sign out. Everything else is refused until the temporary password is gone.
+_PASSWORD_CHANGE_ALLOW = {
+    ("POST", "/api/users/me/password"),
+    ("GET", "/api/users/me"),
+    ("GET", "/api/auth/me"),
+    ("POST", "/api/auth/logout"),
+}
+
 
 @app.middleware("http")
 async def rbac_and_audit(request, call_next):
@@ -208,7 +256,8 @@ async def rbac_and_audit(request, call_next):
     from fastapi.responses import JSONResponse
 
     from .security import (audit, claims_from_request, edge_token_ok, is_public,
-                           rank, required_read_role, required_role)
+                           rank, required_read_role, required_role,
+                           session_state)
 
     path = request.url.path
     method = request.method
@@ -217,6 +266,41 @@ async def rbac_and_audit(request, call_next):
         return await call_next(request)
 
     claims = claims_from_request(request)
+
+    # A JWT is valid on its signature alone until it expires, so a deactivated
+    # account, a demoted one, or one whose password was just reset would keep
+    # working for up to TOKEN_TTL_HOURS. Check the account behind the token is
+    # still entitled to this session, and treat a revoked one as anonymous.
+    # A session on a temporary password is similarly confined: until the
+    # password is changed, only the change itself (plus reading your own
+    # profile and signing out) is allowed. Enforcing this here rather than in
+    # the UI means the temporary password cannot quietly drive the API.
+    if claims is not None:
+        db = SessionLocal()
+        try:
+            state = session_state(db, claims)
+            if state == "revoked":
+                audit(db, user=claims.get("sub", ""), role=claims.get("role", ""),
+                      action=method, target=path, status=401,
+                      detail={"reason": "session revoked"})
+                claims = None
+            elif (state == "must_change_password"
+                    and (method, path) not in _PASSWORD_CHANGE_ALLOW):
+                audit(db, user=claims.get("sub", ""), role=claims.get("role", ""),
+                      action=method, target=path, status=403,
+                      detail={"reason": "password change required"})
+                return JSONResponse(
+                    {"detail": "You must change your temporary password "
+                               "before using the console",
+                     "must_change_password": True},
+                    status_code=403)
+        finally:
+            db.close()
+        if claims is None:
+            return JSONResponse(
+                {"detail": "Session is no longer valid — sign in again"},
+                status_code=401)
+
     request.state.claims = claims
 
     if path.startswith("/snapshots"):
@@ -295,9 +379,9 @@ async def rbac_and_audit(request, call_next):
 
 for r in (auth.router, cameras.router, watchlist.router, sightings.router,
           alerts.router, streams.router, copilot.router, vehicles.router,
-          vahan.router, evidence.router, demo.router, fleet.router,
+          vahan.router, vehicle_trace.router, evidence.router, demo.router, fleet.router,
           analytics.router, edge.router, adapters.router,
-          integrations.router, reports.router, ops.router):
+          integrations.router, reports.router, ops.router, users.router):
     app.include_router(r, prefix="/api")
 
 app.mount("/snapshots", StaticFiles(directory=settings.snapshot_dir), name="snapshots")
