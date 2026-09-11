@@ -19,13 +19,18 @@ are returned so the UI is demonstrable without billing.
 from __future__ import annotations
 
 import asyncio
+import json
+import logging
 import time
+from datetime import datetime
 from typing import Any, Optional
 
 import httpx
 
 from ..config import settings
 from ..utils.plates import is_valid_indian, normalize
+
+log = logging.getLogger("sentinel.vehicle_trace")
 
 
 def sanitize_plate(raw: str) -> str:
@@ -251,22 +256,77 @@ def parse_challans(payload: Optional[dict]) -> tuple[list[dict], dict]:
     return items, summary
 
 
-async def fetch_trace(plate_raw: str) -> dict:
+async def fetch_trace(plate_raw: str, db=None, refresh: bool = False) -> dict:
     plate = sanitize_plate(plate_raw)
+    if db is not None and not refresh:
+        hit = _cache_get(db, plate)
+        if hit is not None:
+            rc_res, ch_block, stored_at = hit
+            return {
+                "plate": plate,
+                "rc": rc_res,
+                "challans": ch_block,
+                "meta": {"mocked": bool(rc_res.get("mocked") or ch_block.get("mocked")),
+                         "duration_ms": 0, "live": is_live(),
+                         "cached": True, "cached_at": stored_at},
+            }
     started = time.monotonic()
     rc_res, ch_res = await asyncio.gather(fetch_rc(plate), fetch_challans(plate))
     items, summary = parse_challans((ch_res.get("payload") if ch_res.get("ok") else None))
     ms = int((time.monotonic() - started) * 1000)
+    ch_block = {"ok": ch_res.get("ok", False), "mocked": ch_res.get("mocked", False),
+                "error": ch_res.get("error"), "notice": ch_res.get("notice"),
+                "items": items, "summary": summary,
+                "raw_status": (ch_res.get("payload") or {}).get("status") if isinstance(ch_res.get("payload"), dict) else None}
+    if db is not None and (rc_res.get("ok") or ch_block.get("ok")):
+        _cache_put(db, plate, rc_res, ch_block)
     return {
         "plate": plate,
         "rc": rc_res,
-        "challans": {"ok": ch_res.get("ok", False), "mocked": ch_res.get("mocked", False),
-                     "error": ch_res.get("error"), "notice": ch_res.get("notice"),
-                     "items": items, "summary": summary,
-                     "raw_status": (ch_res.get("payload") or {}).get("status") if isinstance(ch_res.get("payload"), dict) else None},
-        "meta": {"mocked": bool(rc_res.get("mocked") or ch_res.get("mocked")),
-                 "duration_ms": ms, "live": is_live()},
+        "challans": ch_block,
+        "meta": {"mocked": bool(rc_res.get("mocked") or ch_block.get("mocked")),
+                 "duration_ms": ms, "live": is_live(),
+                 "cached": False, "cached_at": None},
     }
+
+
+def _cache_get(db, plate: str):
+    """Fresh cached (rc, challans, stored_at) or None. Fail-open: any cache
+    problem (including a missing table before restart) falls through to live."""
+    try:
+        from ..models import VehicleTraceCache
+        row = db.get(VehicleTraceCache, plate)
+        if row is None:
+            return None
+        age = (datetime.utcnow() - (row.updated_at or datetime.utcnow())).total_seconds()
+        if age > max(60, settings.vehicle_trace_cache_ttl_s):
+            return None
+        return json.loads(row.rc_json), json.loads(row.challans_json), row.updated_at.isoformat()
+    except Exception as exc:
+        log.warning("trace cache read failed for %s: %s", plate, exc)
+        return None
+
+
+def _cache_put(db, plate: str, rc_res: dict, ch_block: dict) -> None:
+    try:
+        from ..models import VehicleTraceCache
+        row = db.get(VehicleTraceCache, plate)
+        payload_rc = json.dumps(rc_res, default=str)
+        payload_ch = json.dumps(ch_block, default=str)
+        if row is None:
+            db.add(VehicleTraceCache(plate=plate, rc_json=payload_rc,
+                                     challans_json=payload_ch, updated_at=datetime.utcnow()))
+        else:
+            row.rc_json = payload_rc
+            row.challans_json = payload_ch
+            row.updated_at = datetime.utcnow()
+        db.commit()
+    except Exception as exc:
+        log.warning("trace cache write failed for %s: %s", plate, exc)
+        try:
+            db.rollback()
+        except Exception:
+            pass
 
 
 def validate_plate_or_raise(plate_raw: str) -> str:

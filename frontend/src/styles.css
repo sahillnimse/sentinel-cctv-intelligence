@@ -1299,372 +1299,283 @@ button.chip.active {
   }
 }
 
-/* ── Sign-in scene ──────────────────────────────────────────────────────────
-   Full-bleed illustration with the credential card floating over it. The card
-   is translucent so the artwork reads through, and a scrim sits between the
-   two because text over an illustration is unreadable without one. The scrim
-   is what keeps the label contrast legal, not the card's own opacity. */
+/* ── Sign-in ────────────────────────────────────────────────────────────────
+   Full-bleed artwork with the credential card centred over it.
+
+   Deliberately single-theme. The console themes itself for whoever signs in;
+   this screen comes before anyone is identified. Every colour is stated
+   outright rather than taken from the theme tokens, so the screen holds
+   whatever theme the host is in. */
 
 .login-scene {
   position: relative;
   min-height: 100vh;
-  min-height: 100dvh;          /* mobile browsers: dvh excludes the URL bar */
+  min-height: 100dvh;
   display: grid;
   place-items: center;
   padding: 24px;
-  background-color: #10222b;   /* shows while the artwork decodes */
+  /* Shows while the artwork decodes, and anywhere the image cannot cover. */
+  background: #0a1016;
   overflow: hidden;
+  color-scheme: dark;
 }
 
-/* The animated SVG backdrop. An <img> (not a CSS background) so its SMIL
-   traffic / junction / sun motion actually plays. */
 .login-bg {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  animation: bg-settle 2.2s ease-out both;
+  /* The artwork's interest is upper-centre, so bias the crop away from the
+     empty foreground when the viewport is tall. */
+  object-position: 50% 38%;
+  display: block;
 }
 
-@keyframes bg-settle { from { transform: scale(1.06); filter: saturate(.85) } to { transform: none; filter: none } }
-
-/* Slow-drifting ambient light blobs over the artwork. */
-.login-scene::before,
-.login-scene::after {
-  content: '';
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(90px);
-  pointer-events: none;
-  z-index: 1;
-}
-
-.login-scene::before {
-  width: 540px; height: 540px;
-  left: -140px; top: -120px;
-  background: radial-gradient(circle, rgba(240, 180, 90, .32), transparent 70%);
-  animation: orb-drift 16s ease-in-out infinite alternate;
-}
-
-.login-scene::after {
-  width: 640px; height: 640px;
-  right: -160px; bottom: -180px;
-  background: radial-gradient(circle, rgba(64, 180, 190, .28), transparent 70%);
-  animation: orb-drift 21s ease-in-out infinite alternate-reverse;
-}
-
-@keyframes orb-drift {
-  from { transform: translate(0, 0) scale(1) }
-  to   { transform: translate(64px, 44px) scale(1.12) }
-}
-
+/* The artwork is bright and busy. Without this the card's own translucency
+   cannot hold pale text against it, so the scrim is what keeps the labels
+   legible rather than the card's opacity. */
 .login-scene-scrim {
   position: absolute;
   inset: 0;
-  z-index: 2;
-  /* Darker where the card sits, clearer at the edges, so the illustration is
-     still visible but never fights the form. */
-  background:
-    radial-gradient(ellipse 70% 80% at 50% 50%, rgba(8, 20, 28, 0.66) 0%, rgba(8, 20, 28, 0.30) 60%, rgba(8, 20, 28, 0.18) 100%);
   pointer-events: none;
+  background:
+    radial-gradient(ellipse 52% 58% at 50% 50%, rgba(6, 12, 20, 0.62) 0%, rgba(6, 12, 20, 0.30) 58%, rgba(6, 12, 20, 0.12) 100%),
+    linear-gradient(to bottom, rgba(6, 12, 20, 0.34) 0%, rgba(6, 12, 20, 0) 26%, rgba(6, 12, 20, 0) 72%, rgba(6, 12, 20, 0.42) 100%);
 }
 
 .login-card-wrap {
-  position: relative;          /* above the scrim */
-  z-index: 3;
+  position: relative;
   width: 100%;
   display: grid;
   place-items: center;
-}
-
-/* A faint radar-style sweep Hudson-crossing the scene behind the card. */
-.login-card-wrap::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(180deg,
-    transparent 0%,
-    rgba(140, 220, 230, .05) 46%,
-    rgba(255, 255, 255, .09) 50%,
-    rgba(140, 220, 230, .05) 54%,
-    transparent 100%);
-  background-size: 100% 340px;
-  background-repeat: no-repeat;
-  animation: login-scan 9s linear infinite;
-}
-
-@keyframes login-scan {
-  from { background-position: 0 -340px }
-  to   { background-position: 0 110vh }
 }
 
 .login-card {
   position: relative;
   width: 100%;
-  max-width: 384px;
-  padding: 30px 28px 24px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.26);
-  /* Deliberately sheer glass: the animated artwork reads through while the
-     scrim behind keeps the type legal. */
-  background: rgba(10, 22, 30, 0.32);
-  backdrop-filter: blur(28px) saturate(150%);
-  -webkit-backdrop-filter: blur(28px) saturate(150%);
-  box-shadow: 0 24px 60px rgba(4, 12, 18, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.14);
-  color: #f2f6f8;
-  animation: card-in .65s cubic-bezier(.2, .9, .3, 1) both;
-  overflow: hidden;
+  max-width: 372px;
+  display: flex;
+  flex-direction: column;
+  padding: 30px 30px 22px;
+  background: rgba(9, 17, 30, 0.74);
+  backdrop-filter: blur(22px) saturate(115%);
+  -webkit-backdrop-filter: blur(22px) saturate(115%);
+  /* One hairline in the accent, and a single soft highlight along the top
+     edge. Square-ish corners read as instrumentation rather than marketing. */
+  border: 1px solid rgba(95, 216, 232, 0.22);
+  border-radius: 4px;
+  box-shadow:
+    0 30px 70px rgba(2, 6, 12, 0.62),
+    inset 0 1px 0 rgba(158, 230, 240, 0.14);
+  color: #e6eef6;
 }
 
-/* Sheer highlight along the card's top edge. */
-.login-card::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 28px; right: 28px;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .55), transparent);
-  pointer-events: none;
-}
-
-@keyframes card-in {
-  from { opacity: 0; transform: translateY(18px) scale(.985) }
-  to   { opacity: 1; transform: none }
-}
-
-/* Fields arrive in a short stagger behind the card. */
-.login-card > * { animation: rise-in .5s cubic-bezier(.2, .8, .3, 1) both; }
-.login-card > *:nth-child(2)  { animation-delay: .05s }
-.login-card > *:nth-child(3)  { animation-delay: .10s }
-.login-card > *:nth-child(4)  { animation-delay: .15s }
-.login-card > *:nth-child(5)  { animation-delay: .20s }
-.login-card > *:nth-child(6)  { animation-delay: .25s }
-.login-card > *:nth-child(7)  { animation-delay: .30s }
-.login-card > *:nth-child(8)  { animation-delay: .35s }
-.login-card > *:nth-child(n+9){ animation-delay: .40s }
-
-@keyframes rise-in {
-  from { opacity: 0; transform: translateY(10px) }
-  to   { opacity: 1; transform: none }
-}
-
-/* Backdrop blur is unsupported in a few engines and silently does nothing,
-   which would leave pale text on the illustration. Fall back to an opaque
-   panel wherever it is missing. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .login-card { background: rgba(12, 25, 34, 0.88); }
+  .login-card { background: rgba(9, 17, 30, 0.95); }
 }
 
-.login-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 20px;
+  margin-bottom: 22px;
+  border-bottom: 1px solid rgba(158, 230, 240, 0.12);
+}
 
 .login-brand-mark {
-  position: relative;
-  width: 42px; height: 42px;
-  display: grid; place-items: center;
-  border-radius: 11px;
-  background: var(--primary);
-  color: #fff;
+  width: 38px;
+  height: 38px;
   flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 3px;
+  color: #5fd8e8;
+  background: rgba(95, 216, 232, 0.12);
+  border: 1px solid rgba(95, 216, 232, 0.35);
 }
 
-/* Soft radar ping around the brand mark. */
-.login-brand-mark::after {
-  content: '';
-  position: absolute;
-  inset: -4px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, .4);
-  animation: mark-ping 2.8s ease-out infinite;
-  pointer-events: none;
+.login-brand-name {
+  font-family: var(--font-mono);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.3em;
+  color: #f2f8fb;
 }
-
-@keyframes mark-ping {
-  0%   { transform: scale(.92); opacity: 0 }
-  35%  { opacity: .8 }
-  100% { transform: scale(1.28); opacity: 0 }
-}
-
-.login-brand-name { font-size: 19px; font-weight: 700; letter-spacing: 0.14em; }
 
 .login-brand-sub {
-  font-size: 10.5px;
-  letter-spacing: 0.09em;
+  margin-top: 4px;
+  font-size: 10px;
+  letter-spacing: 0.11em;
   text-transform: uppercase;
-  color: rgba(242, 246, 248, 0.68);
-  margin-top: 3px;
+  color: rgba(190, 214, 232, 0.62);
 }
 
 .login-card label {
   display: block;
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: rgba(242, 246, 248, 0.72);
   margin: 0 0 7px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(95, 216, 232, 0.78);
 }
 
 .login-card input {
   width: 100%;
-  margin-bottom: 17px;
+  margin-bottom: 18px;
   padding: 11px 13px;
   font-size: 13.5px;
-  color: #f2f6f8;
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 9px;
-  transition: background .2s ease, border-color .2s ease, box-shadow .2s ease;
+  color: #f2f8fb;
+  background: rgba(4, 10, 20, 0.55);
+  border: 1px solid rgba(158, 230, 240, 0.16);
+  border-radius: 3px;
+  transition: border-color .15s, box-shadow .15s, background .15s;
 }
 
-.login-card input::placeholder { color: rgba(242, 246, 248, 0.42); }
+.login-card input::placeholder { color: rgba(190, 214, 232, 0.34); }
 
 .login-card input:focus {
   outline: none;
-  border-color: var(--primary);
-  background: rgba(255, 255, 255, 0.14);
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
+  background: rgba(4, 10, 20, 0.75);
+  border-color: rgba(95, 216, 232, 0.75);
+  box-shadow: 0 0 0 3px rgba(95, 216, 232, 0.13);
 }
 
-/* Password field with the show/hide eye inside it. The wrap carries the
-   field spacing so the input + toggle align as one unit. */
-.pw-wrap { position: relative; margin-bottom: 17px; }
-
+.login-card .pw-wrap { position: relative; margin-bottom: 18px; }
 .login-card .pw-wrap input { margin-bottom: 0; padding-right: 42px; }
 
-.pw-toggle {
+.login-card .pw-toggle {
   position: absolute;
-  right: 6px;
   top: 50%;
+  right: 4px;
   transform: translateY(-50%);
-  background: transparent;
-  border: none;
-  padding: 6px;
-  color: rgba(242, 246, 248, .55);
-  cursor: pointer;
-  border-radius: 6px;
+  width: 32px;
+  height: 32px;
   display: grid;
   place-items: center;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  color: rgba(190, 214, 232, 0.55);
+  cursor: pointer;
 }
 
-.pw-toggle:hover:not(:disabled) {
-  color: #fff;
-  background: rgba(255, 255, 255, .1);
-  border-color: transparent;
-  box-shadow: none;
-}
+.login-card .pw-toggle:hover { color: #5fd8e8; }
 
 .login-submit {
   width: 100%;
-  margin-top: 4px;
-  padding: 11px 14px;
-  font-size: 13.5px;
+  margin-top: 6px;
+  padding: 12px 14px;
+  font-family: var(--font-mono);
+  font-size: 12px;
   font-weight: 600;
-  border-radius: 9px;
-  position: relative;
-  overflow: hidden;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: #041018;
+  background: #5fd8e8;
+  border: 1px solid #5fd8e8;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background .15s, box-shadow .15s, opacity .15s;
 }
 
-/* Light sheen sweeping across the submit button. */
-.login-submit::after {
-  content: '';
-  position: absolute;
-  top: 0; bottom: 0;
-  left: -60%;
-  width: 40%;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, .35), transparent);
-  transform: skewX(-18deg);
-  pointer-events: none;
+.login-submit:hover:not(:disabled) {
+  background: #7ae4f2;
+  box-shadow: 0 0 22px rgba(95, 216, 232, 0.3);
 }
 
-.login-submit:hover:not(:disabled)::after { animation: sheen .8s ease; }
-.login-submit[data-busy="true"]::after { animation: sheen 1.2s linear infinite; }
-
-@keyframes sheen {
-  from { left: -60% }
-  to   { left: 130% }
-}
+.login-submit:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .login-notice {
   margin-bottom: 18px;
   padding: 11px 13px;
-  border-radius: 9px;
-  font-size: 12.5px;
-  line-height: 1.45;
-  color: #ffe6b8;
-  background: rgba(224, 152, 26, 0.16);
-  border: 1px solid rgba(224, 152, 26, 0.4);
+  border-radius: 3px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #ffdfae;
+  background: rgba(240, 166, 75, 0.1);
+  border-left: 2px solid rgba(240, 166, 75, 0.75);
 }
 
 .login-err {
-  margin-bottom: 14px;
-  color: #ffc9c0;
-  background: rgba(200, 54, 38, 0.18);
-  border: 1px solid rgba(200, 54, 38, 0.42);
-  border-radius: 9px;
+  margin-bottom: 16px;
   padding: 10px 12px;
+  border-radius: 3px;
   font-size: 12.5px;
-  animation: login-shake .4s ease;
+  color: #ffc4b8;
+  background: rgba(214, 68, 46, 0.14);
+  border-left: 2px solid rgba(214, 68, 46, 0.8);
 }
 
-@keyframes login-shake {
-  0%, 100% { transform: none }
-  20% { transform: translateX(-7px) }
-  45% { transform: translateX(6px) }
-  70% { transform: translateX(-4px) }
-  90% { transform: translateX(2px) }
-}
-
-.login-guest {
-  margin-top: 15px;
+.login-links {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  color: rgba(242, 246, 248, 0.4);
-  font-size: 12px;
+  gap: 10px;
+  margin-top: 16px;
 }
 
-.login-guest button {
+.login-links span {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(190, 214, 232, 0.3);
+}
+
+.login-links button {
+  padding: 3px 2px;
   background: transparent;
   border: none;
-  padding: 4px;
-  font-size: 12px;
-  color: rgba(242, 246, 248, 0.66);
-  text-decoration: underline;
+  font-size: 11.5px;
+  color: rgba(190, 214, 232, 0.62);
   cursor: pointer;
+  transition: color .15s;
 }
 
-.login-guest button:hover { color: #f2f6f8; }
+.login-links button:hover { color: #5fd8e8; }
 
 .login-legal {
-  margin-top: 20px;
+  margin-top: 22px;
   padding-top: 15px;
-  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  border-top: 1px solid rgba(158, 230, 240, 0.12);
   text-align: center;
-  font-size: 10px;
-  letter-spacing: 0.07em;
+  font-size: 9px;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: rgba(242, 246, 248, 0.5);
+  color: rgba(190, 214, 232, 0.4);
 }
 
 .login-close {
   position: absolute;
-  top: 12px; right: 12px;
-  width: 26px; height: 26px;
-  display: grid; place-items: center;
+  top: 10px;
+  right: 10px;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
   padding: 0;
   background: transparent;
   border: none;
-  color: rgba(242, 246, 248, 0.6);
+  color: rgba(190, 214, 232, 0.5);
   font-size: 13px;
   cursor: pointer;
 }
 
-.login-close:hover { color: #f2f6f8; }
+.login-close:hover { color: #f2f8fb; }
+
+.login-card :focus-visible { outline: 2px solid #5fd8e8; outline-offset: 2px; }
+
+/* In the header modal the artwork is unnecessary — the modal supplies its own
+   backdrop, and a second one behind it would compete. */
+.modal .login-scene { min-height: 0; padding: 0; background: transparent; overflow: visible; }
+.modal .login-bg,
+.modal .login-scene-scrim { display: none; }
 
 @media (max-width: 480px) {
-  .login-card { padding: 24px 20px 20px; border-radius: 14px; }
-  .login-brand-name { font-size: 17px; }
+  .login-card { padding: 24px 22px 18px; }
+  .login-brand-name { font-size: 15px; letter-spacing: 0.24em; }
 }

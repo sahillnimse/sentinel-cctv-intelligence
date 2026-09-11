@@ -77,14 +77,14 @@ export default function Vehicle() {
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
-  const run = useCallback(async (raw: string) => {
+  const run = useCallback(async (raw: string, refresh = false) => {
     const p = raw.trim().toUpperCase().replace(/[\s-]+/g, '')
     if (!p) return
     setLoading(true)
     setErr(null)
     setData(null)
     try {
-      const res = await api.vehicleTrace(p)
+      const res = await api.vehicleTrace(p, refresh)
       setData(res)
     } catch (e: unknown) {
       setErr(errorMessage(e))
@@ -150,6 +150,24 @@ export default function Vehicle() {
           <button className="primary" type="submit" disabled={loading || !input.trim()}>
             {loading ? 'Tracing…' : 'Trace Vehicle'}
           </button>
+          <button
+            type="button"
+            disabled={loading || !plate}
+            onClick={() => run(plate, true)}
+            title="Bypass the cache and re-fetch live RC + challan data"
+          >
+            Refresh live
+          </button>
+          {data?.meta.cached && (
+            <span
+              className="pill unknown"
+              title={data.meta.cached_at ? `Stored ${new Date(data.meta.cached_at).toLocaleString('en-IN')}` : 'Served from cache'}
+            >
+              Cached{data.meta.cached_at
+                ? ` · ${new Date(data.meta.cached_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })}`
+                : ''}
+            </span>
+          )}
           {data?.meta.mocked && (
             <span className="pill flag" title="Keys or challan host missing — sample payload">Sample data</span>
           )}

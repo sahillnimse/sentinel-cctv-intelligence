@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { api, auth } from '../api'
 import type { Role } from '../api'
 import { EyeIcon, EyeOffIcon, ShieldIcon } from '../components/Icons'
-import background from '../assets/login-bg.svg'
 
 interface LoginProps {
   onDone: () => void
@@ -31,11 +30,16 @@ function PasswordField(props: React.InputHTMLAttributes<HTMLInputElement>) {
 /**
  * Sign-in for the console.
  *
+ * The backdrop is served from public/ rather than imported, so the artwork can
+ * be swapped by dropping a new file in beside it, and a missing file leaves the
+ * page working on its base colour instead of failing the build.
+ *
+ * The card stays dark whichever theme the console is set to. This screen comes
+ * before anyone is identified, so there is no operator preference to honour.
+ *
  * The one-click role buttons that used to sit at the top are gone. They filled
  * in the shipped default credentials, which meant the login screen published
- * working administrator credentials to anyone who reached it. Convenient for a
- * demo, indefensible on a police console, and nothing in the requirements asked
- * for it.
+ * working administrator credentials to anyone who reached it.
  *
  * Guest access is kept and is a deliberate, separate thing: it takes no
  * credentials, is read-only, and every mutating call it attempts is refused by
@@ -111,11 +115,17 @@ export default function Login({ onDone, onClose }: LoginProps) {
   }
 
   return (
-    // The backdrop is an <img>, not a CSS background: SVG SMIL animation only
-    // runs when the SVG is rendered as a document, so this is what makes the
-    // traffic/cone/sun motion actually play.
     <div className="login-scene">
-      <img className="login-bg" src={background} alt="" aria-hidden="true" />
+      {/* Hidden rather than left broken when the file is absent, so a missing
+          or renamed backdrop degrades to the base colour instead of showing a
+          broken-image marker in the corner. */}
+      <img
+        className="login-bg"
+        src="/login-bg.png"
+        alt=""
+        aria-hidden="true"
+        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+      />
       <div className="login-scene-scrim" />
 
       <div className="login-card-wrap">
@@ -128,7 +138,7 @@ export default function Login({ onDone, onClose }: LoginProps) {
 
           <div className="login-brand">
             <div className="login-brand-mark">
-              <ShieldIcon size={22} />
+              <ShieldIcon size={20} />
             </div>
             <div>
               <div className="login-brand-name">SENTINEL</div>
@@ -161,13 +171,12 @@ export default function Login({ onDone, onClose }: LoginProps) {
                 onChange={(e) => setConfirmPassword(e.target.value)}
               />
 
-              {err && <div className="err login-err">{err}</div>}
+              {err && <div className="login-err">{err}</div>}
 
               <button
-                className="primary login-submit"
+                className="login-submit"
                 type="submit"
                 disabled={busy || newPassword.length < 10 || !confirmPassword}
-                data-busy={busy}
               >
                 {busy ? 'Saving…' : 'Set password and continue'}
               </button>
@@ -193,28 +202,27 @@ export default function Login({ onDone, onClose }: LoginProps) {
                 onChange={(e) => setPassword(e.target.value)}
               />
 
-              {err && <div className="err login-err">{err}</div>}
+              {err && <div className="login-err">{err}</div>}
 
               <button
-                className="primary login-submit"
+                className="login-submit"
                 type="submit"
                 disabled={busy || !username || !password}
-                data-busy={busy}
               >
                 {busy ? 'Authenticating…' : 'Sign in to console'}
               </button>
 
-              <div className="login-guest">
+              <div className="login-links">
                 <button type="button" onClick={continueAsGuest}>
-                  Continue as guest · read-only
+                  Guest · read-only
                 </button>
-                <span aria-hidden="true">·</span>
+                <span aria-hidden="true" />
                 <button type="button" onClick={resetForm}>
-                  Reset
+                  Clear
                 </button>
-                <span aria-hidden="true">·</span>
+                <span aria-hidden="true" />
                 <button type="button" onClick={() => setShowForgot((s) => !s)}>
-                  {showForgot ? 'Hide recovery help' : 'Forgot password?'}
+                  {showForgot ? 'Hide help' : 'Forgot password?'}
                 </button>
               </div>
 

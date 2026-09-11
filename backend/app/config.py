@@ -116,6 +116,9 @@ class Settings(BaseSettings):
     rapidapi_rc_path: str = "/getVehicleInfo"
     rapidapi_challan_path: str = "/getChallans"
     rapidapi_timeout_s: float = 10.0
+    # How long a stored vehicle trace answers from cache before going live
+    # again. Refresh (?refresh=true) bypasses it on demand.
+    vehicle_trace_cache_ttl_s: int = 3600
 
     class Config:
         env_file = BASE_DIR / ".env"

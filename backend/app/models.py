@@ -160,3 +160,17 @@ class Alert(Base):
     plate: Mapped[str] = mapped_column(String(20), index=True)
     ts: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     acknowledged: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class VehicleTraceCache(Base):
+    """Last known RTO + challan payload per plate, so repeat lookups answer
+    instantly without billing the vendor again. Refresh (?refresh=true) or TTL
+    expiry re-fetches live. Cached failures are never stored, so a vendor
+    outage does not glue an error to the plate."""
+
+    __tablename__ = "vehicle_trace_cache"
+
+    plate: Mapped[str] = mapped_column(String(20), primary_key=True)  # normalized
+    rc_json: Mapped[str] = mapped_column(Text, default="{}")
+    challans_json: Mapped[str] = mapped_column(Text, default="{}")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

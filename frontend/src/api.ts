@@ -82,7 +82,7 @@ export type VehicleTraceResult = {
     summary: ChallanSummary
     raw_status?: boolean | null
   }
-  meta: { mocked: boolean; duration_ms: number; live: boolean }
+  meta: { mocked: boolean; duration_ms: number; live: boolean; cached: boolean; cached_at: string | null }
 }
 
 export type WatchlistEntry = {
@@ -521,8 +521,8 @@ export const api = {
   ackAlert: (id: number) => req<unknown>(`/api/alerts/${id}/ack`, { method: 'POST' }),
 
   vahan: (plate: string) => req<any>(`/api/vahan/${encodeURIComponent(plate)}`),
-  vehicleTrace: (plate: string) =>
-    req<VehicleTraceResult>(`/api/vehicle/${encodeURIComponent(plate)}/trace`),
+  vehicleTrace: (plate: string, refresh = false) =>
+    req<VehicleTraceResult>(`/api/vehicle/${encodeURIComponent(plate)}/trace${refresh ? '?refresh=true' : ''}`),
   vehicleRc: (plate: string) =>
     req<{ plate: string; ok: boolean; mocked?: boolean; payload?: any; error?: { code: string; message: string } }>(
       `/api/vehicle/${encodeURIComponent(plate)}/rc`),

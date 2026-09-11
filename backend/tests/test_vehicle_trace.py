@@ -53,6 +53,76 @@ def test_trace_routes_registered(anon, monkeypatch):
     assert body["plate"] == "UP16CD1996"
     assert "rc" in body and "challans" in body
     assert body["challans"]["summary"]["pending_count"] == 2
+    assert body["meta"]["cached"] is False
+
+
+def test_trace_cache_hit_skips_vendors(anon, monkeypatch):
+    monkeypatch.setattr(svc.settings, "rapidapi_key", "")
+    monkeypatch.setattr(svc.settings, "rapidapi_host", "")
+    monkeypatch.setattr(svc.settings, "rapidapi_challan_host", "")
+    assert anon.get("/api/vehicle/GJ01AB1234/trace").status_code == 200
+    calls = {"n": 0}
+
+    async def counting_rc(plate):
+        calls["n"] += 1
+        return {"ok": True, "mocked": True, "payload": svc.mock_rc(plate)}
+
+    async def counting_ch(plate):
+        calls["n"] += 1
+        return {"ok": True, "mocked": True, "payload": svc.mock_challans(plate)}
+
+    monkeypatch.setattr(svc, "fetch_rc", counting_rc)
+    monkeypatch.setattr(svc, "fetch_challans", counting_ch)
+    r = anon.get("/api/vehicle/GJ01AB1234/trace")
+    assert r.status_code == 200
+    assert r.json()["meta"]["cached"] is True
+    assert calls["n"] == 0, "cached trace must not call vendors"
+
+
+def test_trace_refresh_bypasses_cache(anon, monkeypatch):
+    monkeypatch.setattr(svc.settings, "rapidapi_key", "")
+    monkeypatch.setattr(svc.settings, "rapidapi_host", "")
+    monkeypatch.setattr(svc.settings, "rapidapi_challan_host", "")
+    assert anon.get("/api/vehicle/MH12AB0001/trace").status_code == 200
+    r = anon.get("/api/vehicle/MH12AB0001/trace?refresh=true")
+    assert r.status_code == 200
+    assert r.json()["meta"]["cached"] is False
+
+
+def test_trace_stale_cache_refetches(anon, monkeypatch):
+    from datetime import datetime, timedelta
+
+    from app.db import SessionLocal
+    from app.models import VehicleTraceCache
+
+    monkeypatch.setattr(svc.settings, "rapidapi_key", "")
+    monkeypatch.setattr(svc.settings, "rapidapi_host", "")
+    monkeypatch.setattr(svc.settings, "rapidapi_challan_host", "")
+    assert anon.get("/api/vehicle/DL01C1234/trace").status_code == 200
+    db = SessionLocal()
+    try:
+        row = db.get(VehicleTraceCache, "DL01C1234")
+        assert row is not None
+        row.updated_at = datetime.utcnow() - timedelta(days=2)
+        db.commit()
+    finally:
+        db.close()
+    calls = {"n": 0}
+
+    async def counting_rc(plate):
+        calls["n"] += 1
+        return {"ok": True, "mocked": True, "payload": svc.mock_rc(plate)}
+
+    async def counting_ch(plate):
+        calls["n"] += 1
+        return {"ok": True, "mocked": True, "payload": svc.mock_challans(plate)}
+
+    monkeypatch.setattr(svc, "fetch_rc", counting_rc)
+    monkeypatch.setattr(svc, "fetch_challans", counting_ch)
+    r = anon.get("/api/vehicle/DL01C1234/trace")
+    assert r.status_code == 200
+    assert r.json()["meta"]["cached"] is False
+    assert calls["n"] == 2
 
 
 def test_trace_invalid_plate(anon):
