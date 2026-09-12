@@ -98,13 +98,15 @@ class TestPrune:
     def test_returns_counts(self, db):
         _fixture(db, age_days=2, acknowledged=True)
         counts = prune_older_than(db, datetime.utcnow() - timedelta(days=1))
-        assert set(counts) == {"alerts", "sightings", "detections", "traces"}
+        assert set(counts) == {"alerts", "sightings", "detections", "traces",
+                               "crowd", "anomalies"}
         assert counts["alerts"] == 1
         assert counts["sightings"] == 1
 
     def test_empty_database_is_safe(self, db):
         assert prune_older_than(db, datetime.utcnow()) == {
-            "alerts": 0, "sightings": 0, "detections": 0, "traces": 0}
+            "alerts": 0, "sightings": 0, "detections": 0, "traces": 0,
+            "crowd": 0, "anomalies": 0}
 
 
 class TestTraceCacheRetention:

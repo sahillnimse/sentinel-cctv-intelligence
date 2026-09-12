@@ -26,12 +26,13 @@ import cv2
 
 from .. import ws
 from ..db import SessionLocal
-from ..models import (Alert, Camera, Sighting, VehicleDetection,
-                      WatchlistEntry)
+from ..models import (Alert, Anomaly, Camera, CrowdCount, Sighting,
+                      VehicleDetection, WatchlistEntry)
 from ..agent import plate_llm
 from ..utils.plates import (coerce_indian, edit_distance, fold_ambiguous,
                             is_valid_indian, normalize, plates_match)
-from . import pipeline
+from . import anomaly as anomaly_mod
+from . import batcher, pipeline
 
 log = logging.getLogger("sentinel.worker")
 
@@ -95,9 +96,21 @@ VBOX_COLOR = {"car": (238, 211, 34), "motorcycle": (153, 217, 52),
               "bus": (36, 191, 251), "truck": (75, 90, 251), "vehicle": (200, 200, 200)}
 
 
-def _annotate(frame, vehicles):
-    """Draw vehicle boxes + plate labels on a copy of the frame."""
+PERSON_COLOR = (238, 90, 255)  # BGR, matches the face-alert box
+
+
+def _annotate(frame, vehicles, persons=()):
+    """Draw vehicle boxes, plate labels and people on a copy of the frame."""
     out = frame.copy()
+    for box in persons or ():
+        x1, y1, x2, y2 = box
+        cv2.rectangle(out, (x1, y1), (x2, y2), PERSON_COLOR, 1)
+    if persons:
+        badge = f"PEOPLE {len(persons)}"
+        (tw, th), _ = cv2.getTextSize(badge, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+        cv2.rectangle(out, (8, 8), (8 + tw + 10, 8 + th + 10), PERSON_COLOR, -1)
+        cv2.putText(out, badge, (13, 8 + th + 3), cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5, (10, 15, 22), 1, cv2.LINE_AA)
     for v in vehicles:
         x1, y1, x2, y2 = v.box
         color = VBOX_COLOR.get(v.vehicle_type, (200, 200, 200))
@@ -195,6 +208,9 @@ class CameraWorker(threading.Thread):
         self._published_once = False             # has this worker put up any frame yet
         self._last_face = 0.0                    # monotonic ts of last face pass
         self._recent_faces: dict[int, float] = {}  # watchlist person id -> last alert ts
+        self._anomaly = anomaly_mod.CameraState(camera_id)
+        self._last_crowd_write = 0.0             # monotonic ts of last crowd row
+        self.last_person_count = 0               # surfaced on the fleet view
         # clip-position (PTS) buckets we've already logged. The grid feeds are
         # looping clips, so we log each unique moment of the clip ONCE — this
         # covers the whole clip across loops without missing the start, and a
@@ -299,7 +315,7 @@ class CameraWorker(threading.Thread):
             due = now - self._last_preview > PREVIEW_SECONDS
             if due and not self._published_once:
                 self._published_once = True
-                self._publish_preview(cam, frame, [])
+                self._publish_preview(cam, frame, [], [])
 
             # Dedup by clip position: log each moment of the looping clip once.
             # A frame whose PTS bucket we've already logged is a replay — we
@@ -312,9 +328,16 @@ class CameraWorker(threading.Thread):
                 self._seen_pts.add(bucket)
 
             vehicles = []
+            persons = []
             if analytics:
                 try:
-                    vehicles = pipeline.analyze(frame, settings.min_plate_confidence)
+                    # One detector pass yields both channels. The batcher runs
+                    # it on the shared collector thread when it is up, so the
+                    # accelerator sees one caller instead of one per camera.
+                    objects = batcher.detect(frame)
+                    scene = pipeline.analyze_scene(
+                        frame, settings.min_plate_confidence, objects=objects)
+                    vehicles, persons = scene.vehicles, scene.persons
                 except Exception as exc:
                     self.last_error = str(exc)
                 if vehicles and fresh:  # log only clip moments we haven't seen
@@ -323,6 +346,13 @@ class CameraWorker(threading.Thread):
                         if v.plate:
                             self._record(db, cam, frame, v, pts_ms, now)
                     db.commit()
+
+                # Crowd density and anomalies run on every sampled frame, not
+                # only on fresh clip positions: dwell time and surges are
+                # properties of the moment, and a looping clip genuinely does
+                # show the crowd again.
+                if settings.crowd_counting_enabled:
+                    self._crowd_pass(db, cam, frame, persons, now)
 
                 # Face pass for wanted/missing persons. Zero cost when nobody is
                 # enrolled; otherwise throttled + globally semaphore-capped so a
@@ -348,13 +378,13 @@ class CameraWorker(threading.Thread):
             # interval is roughly seven times the intended rate, per camera.
             if due:
                 self._last_preview = now
-                self._publish_preview(cam, frame, vehicles)
+                self._publish_preview(cam, frame, vehicles, persons)
 
         if cap is not None:
             cap.release()
         self._set_status(db, cam, "offline")
 
-    def _publish_preview(self, cam: Camera, frame, vehicles) -> None:
+    def _publish_preview(self, cam: Camera, frame, vehicles, persons=()) -> None:
         """Write the tile image for this camera, replacing it atomically.
 
         The snapshot endpoint reads this file whole on an unrelated thread. A
@@ -367,7 +397,7 @@ class CameraWorker(threading.Thread):
         # returns false for anything it does not recognise.
         tmp = final.with_name(f".{final.stem}.{os.getpid()}.{threading.get_ident()}.tmp.jpg")
         try:
-            shown = _annotate(frame, vehicles) if vehicles else frame
+            shown = _annotate(frame, vehicles, persons) if (vehicles or persons) else frame
             small = cv2.resize(shown, (640, 360)) if shown.shape[1] > 640 else shown
             if not cv2.imwrite(str(tmp), small, [cv2.IMWRITE_JPEG_QUALITY, 72]):
                 raise OSError(f"imwrite returned false for {tmp}")
@@ -378,6 +408,64 @@ class CameraWorker(threading.Thread):
                 tmp.unlink(missing_ok=True)
             except OSError:
                 pass
+
+    def _crowd_pass(self, db, cam: Camera, frame, persons, mono_now: float) -> None:
+        """Record crowd density and raise anomalies for this frame.
+
+        Counting is free — the people were already in the detector output. The
+        cost here is one sampled DB row per camera per CROWD_SAMPLE_SECONDS,
+        plus a snapshot only when something actually fires.
+        """
+        count = len(persons)
+        self.last_person_count = count
+
+        events = self._anomaly.observe(persons, frame.shape, mono_now)
+        baseline = self._anomaly.baseline
+
+        if mono_now - self._last_crowd_write >= settings.crowd_sample_seconds:
+            self._last_crowd_write = mono_now
+            db.add(CrowdCount(camera_id=cam.id, ts=datetime.utcnow(),
+                              person_count=count, baseline=round(baseline, 2)))
+            if not events:
+                db.commit()
+
+        for ev in events:
+            self._raise_anomaly(db, cam, frame, persons, ev)
+        if events:
+            db.commit()
+
+    def _raise_anomaly(self, db, cam: Camera, frame, persons, ev: dict) -> None:
+        """Persist one anomaly with its evidence frame and push it to consoles."""
+        fname = ""
+        try:
+            annotated = _annotate(frame, [], persons)
+            label = f"{ev['kind'].upper().replace('_', ' ')}  {ev['detail'][:60]}"
+            cv2.putText(annotated, label, (12, annotated.shape[0] - 14),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, PERSON_COLOR, 2, cv2.LINE_AA)
+            fname = f"anom_{ev['kind']}_cam{cam.id}_{int(time.time())}.jpg"
+            cv2.imwrite(str(settings.snapshot_dir / fname), annotated,
+                        [cv2.IMWRITE_JPEG_QUALITY, 80])
+        except Exception:
+            log.exception("camera %s anomaly snapshot failed", cam.id)
+            fname = ""
+
+        row = Anomaly(
+            camera_id=cam.id, kind=ev["kind"], severity=ev["severity"],
+            detail=ev["detail"], value=ev["value"], baseline=ev["baseline"],
+            ts=datetime.utcnow(), snapshot=fname,
+            sha256=_sha256_file(settings.snapshot_dir / fname) if fname else "",
+        )
+        db.add(row)
+        db.flush()
+
+        ws.broadcast({
+            "type": "anomaly", "anomaly_id": row.id, "kind": ev["kind"],
+            "severity": ev["severity"], "detail": ev["detail"],
+            "value": ev["value"], "baseline": ev["baseline"],
+            "camera_id": cam.id, "camera_name": cam.name,
+            "location": cam.location_name, "ts": row.ts, "snapshot": fname,
+        })
+        log.info("ANOMALY %s on camera %s: %s", ev["kind"], cam.id, ev["detail"])
 
     def _log_vehicle(self, db, cam: Camera, frame, v, mono_now: float) -> None:
         """Store every vehicle detection (with its best-effort plate), deduped
@@ -586,6 +674,8 @@ def worker_status() -> list[dict]:
                     "frames_processed": w.frames_processed,
                     "source_url": w.source_url,
                     "last_error": w.last_error,
+                    "person_count": w.last_person_count,
+                    "crowd_baseline": round(w._anomaly.baseline, 2),
                 }
             )
         return out

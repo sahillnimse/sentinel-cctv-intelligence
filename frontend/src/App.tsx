@@ -15,6 +15,7 @@ import Detections from './pages/Detections'
 import Analytics from './pages/Analytics'
 import Watchlist from './pages/Watchlist'
 import Alerts from './pages/Alerts'
+import Crowd from './pages/Crowd'
 import Fleet from './pages/Fleet'
 import Audit from './pages/Audit'
 import Users from './pages/Users'
@@ -58,6 +59,7 @@ const SECTIONS: { title: string; items: Item[] }[] = [
       { to: '/trace', label: 'Vehicle Trace', icon: RouteIcon },
       { to: '/detections', label: 'Detection Log', icon: CarIcon },
       { to: '/analytics', label: 'Analytics', icon: BarChartIcon },
+      { to: '/crowd', label: 'Crowd & Anomalies', icon: UserIcon },
       { to: '/watchlist', label: 'Watchlist', icon: ListIcon },
     ],
   },
@@ -106,6 +108,14 @@ export default function App() {
   // Alerts socket
   useEffect(() => {
     const off = alertSocket((e) => {
+      if (e?.type === 'anomaly') {
+        // Anomalies get the same toast so an operator sees them without
+        // sitting on the page, but they are not watchlist hits and must not
+        // inflate the unacknowledged-alert badge.
+        setToast(`${e.kind === 'loitering' ? 'Loitering' : 'Crowd surge'} — ${e.camera_name ?? 'camera'}`)
+        setTimeout(() => setToast(null), 6500)
+        return
+      }
       if (e?.type !== 'alert') return
       setUnacked((n) => n + 1)
       setToast(`${e.plate ?? 'Match'} — ${e.reason ?? 'watchlist'} at ${e.camera_name ?? 'camera'}`)
@@ -272,6 +282,7 @@ export default function App() {
             <Route path="/vehicle/:plate_number" element={<Vehicle />} />
             <Route path="/detections" element={<Detections />} />
             <Route path="/analytics" element={<Analytics />} />
+            <Route path="/crowd" element={<Crowd />} />
             <Route path="/watchlist" element={<Watchlist />} />
             <Route path="/cameras" element={<Cameras />} />
             <Route path="/coverage" element={<Coverage />} />

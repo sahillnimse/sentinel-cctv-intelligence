@@ -162,6 +162,53 @@ class Alert(Base):
     acknowledged: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
+class CrowdCount(Base):
+    """People in frame on one camera at one moment.
+
+    The detector already returns people; the vehicle cascade filtered them out.
+    Persisting the count gives crowd density per camera over time, which is
+    both a Model 4 analytics deliverable and the input the surge detector
+    compares against.
+
+    Sampled rather than per-frame: one row per camera per CROWD_SAMPLE_SECONDS,
+    so a busy junction does not write a row for every decoded frame.
+    """
+
+    __tablename__ = "crowd_counts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    camera_id: Mapped[int] = mapped_column(ForeignKey("cameras.id"), index=True)
+    ts: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    person_count: Mapped[int] = mapped_column(default=0)
+    # Rolling median for this camera when the row was written, so a reviewer can
+    # see what "normal" looked like without recomputing it.
+    baseline: Mapped[float] = mapped_column(Float, default=0.0)
+
+
+class Anomaly(Base):
+    """Something on a camera that departs from that camera's own normal.
+
+    Deliberately per-camera relative rather than one statewide threshold: a
+    bus terminal at forty people is ordinary and a rural junction at fifteen is
+    not. Severity is advisory; an operator acknowledges, and acknowledgement is
+    what retention respects.
+    """
+
+    __tablename__ = "anomalies"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    camera_id: Mapped[int] = mapped_column(ForeignKey("cameras.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(30), index=True)  # crowd_surge | loitering
+    severity: Mapped[str] = mapped_column(String(20), default="info")  # info|warning|critical
+    detail: Mapped[str] = mapped_column(Text, default="")
+    value: Mapped[float] = mapped_column(Float, default=0.0)     # count, or dwell seconds
+    baseline: Mapped[float] = mapped_column(Float, default=0.0)  # what normal was
+    ts: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    snapshot: Mapped[str] = mapped_column(String(300), default="")
+    sha256: Mapped[str] = mapped_column(String(64), default="")
+    acknowledged: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
 class VehicleTraceCache(Base):
     """Last known RTO + challan payload per plate, so repeat lookups answer
     instantly without billing the vendor again. Refresh (?refresh=true) or TTL

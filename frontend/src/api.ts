@@ -379,6 +379,65 @@ function permissionMessage(detail: string): [string, Role | undefined] {
           'for this action.', undefined]
 }
 
+// --- crowd density and anomalies -------------------------------------------
+// People come out of the same detector pass as the vehicle log, so these are a
+// read side over rows the workers already wrote. Every figure ships with the
+// camera's own baseline: a headcount means nothing without the normal it is
+// being compared against.
+
+export interface CrowdCameraRow {
+  camera_id: number
+  camera_name: string
+  location: string
+  department: string
+  people: number
+  baseline: number
+  ratio: number
+  ts: string
+}
+
+export interface CrowdSummary {
+  window_minutes: number
+  series: { t: string; people: number; samples: number }[]
+  cameras: CrowdCameraRow[]
+  totals: {
+    samples: number
+    cameras_reporting: number
+    people_now: number
+    peak: number
+    mean: number
+  }
+}
+
+export type AnomalyKind = 'crowd_surge' | 'loitering'
+export type AnomalySeverity = 'info' | 'warning' | 'critical'
+
+export interface AnomalyRow {
+  id: number
+  camera_id: number
+  camera_name: string
+  location: string
+  department: string
+  kind: AnomalyKind | string
+  severity: AnomalySeverity | string
+  detail: string
+  value: number
+  baseline: number
+  ts: string
+  snapshot: string
+  sha256: string
+  acknowledged: boolean
+}
+
+export interface AnomalySummary {
+  window_hours: number
+  total: number
+  open: number
+  by_kind: { kind: string; count: number }[]
+  by_severity: { severity: string; count: number }[]
+  top_cameras: { camera_id: number; camera_name: string; count: number }[]
+}
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const token = auth.token()
   let res: Response
@@ -519,6 +578,18 @@ export const api = {
 
   alerts: () => req<Alert[]>('/api/alerts'),
   ackAlert: (id: number) => req<unknown>(`/api/alerts/${id}/ack`, { method: 'POST' }),
+
+  crowdSummary: (minutes = 60) => req<CrowdSummary>(`/api/crowd/summary?minutes=${minutes}`),
+  anomalies: (params: { limit?: number; kind?: string; severity?: string;
+                        acknowledged?: boolean; camera_id?: number } = {}) => {
+    const q = new URLSearchParams()
+    Object.entries(params).forEach(([k, v]) => v !== undefined && v !== '' && q.set(k, String(v)))
+    return req<{ items: AnomalyRow[]; count: number }>(`/api/crowd/anomalies?${q}`)
+  },
+  anomalySummary: (hours = 24) =>
+    req<AnomalySummary>(`/api/crowd/anomalies/summary?hours=${hours}`),
+  ackAnomaly: (id: number) =>
+    req<unknown>(`/api/crowd/anomalies/${id}/ack`, { method: 'POST' }),
 
   vahan: (plate: string) => req<any>(`/api/vahan/${encodeURIComponent(plate)}`),
   vehicleTrace: (plate: string, refresh = false) =>

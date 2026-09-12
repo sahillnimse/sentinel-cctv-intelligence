@@ -67,7 +67,7 @@ def test_trace_cache_hit_skips_vendors(anon, monkeypatch):
         calls["n"] += 1
         return {"ok": True, "mocked": True, "payload": svc.mock_rc(plate)}
 
-    async def counting_ch(plate):
+    async def counting_ch(plate, refresh=False):
         calls["n"] += 1
         return {"ok": True, "mocked": True, "payload": svc.mock_challans(plate)}
 
@@ -113,7 +113,7 @@ def test_trace_stale_cache_refetches(anon, monkeypatch):
         calls["n"] += 1
         return {"ok": True, "mocked": True, "payload": svc.mock_rc(plate)}
 
-    async def counting_ch(plate):
+    async def counting_ch(plate, refresh=False):
         calls["n"] += 1
         return {"ok": True, "mocked": True, "payload": svc.mock_challans(plate)}
 

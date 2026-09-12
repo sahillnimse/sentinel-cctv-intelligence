@@ -47,7 +47,15 @@ def _creds() -> tuple[str, str, str]:
 
 
 def is_live() -> bool:
+    """True when some real upstream is configured, vendor or microservice.
+
+    The federated vehicle service counts: with it configured the challan half
+    of a trace is answered by a real provider chain even when no RapidAPI
+    credentials are set on this process.
+    """
     key, host, challan_host = _creds()
+    if (settings.vehicle_service_url or "").strip():
+        return True
     return bool(key and (host or challan_host))
 
 
@@ -194,7 +202,56 @@ async def fetch_rc(plate: str) -> dict:
     return {"ok": True, "mocked": False, "payload": data}
 
 
-async def fetch_challans(plate: str) -> dict:
+def _service_url() -> str:
+    return (settings.vehicle_service_url or "").strip().rstrip("/")
+
+
+async def fetch_challans_via_service(plate: str, refresh: bool = False) -> Optional[dict]:
+    """Delegate the challan lookup to the standalone vehicle microservice.
+
+    That service owns provider failover, its own cache and a circuit breaker,
+    which is more than the in-process path does. Returning None means "not
+    configured or not answering", and the caller falls back to the in-process
+    vendor call rather than failing the whole trace — the platform stays a
+    single deployable when the microservice is not run.
+
+    Its response already carries a top-level `challans` list whose field names
+    parse_challans recognises, so nothing needs reshaping here.
+    """
+    base = _service_url()
+    if not base:
+        return None
+    url = f"{base}/api/v1/vehicle/{plate}/fines"
+    params = {"force_refresh": "true"} if refresh else None
+    try:
+        async with httpx.AsyncClient(timeout=settings.vehicle_service_timeout_s) as client:
+            resp = await client.get(url, params=params)
+        if resp.status_code >= 400:
+            log.warning("vehicle service %s returned %s", url, resp.status_code)
+            return None
+        data = resp.json()
+    except Exception as exc:
+        log.warning("vehicle service unreachable (%s); falling back in-process", exc)
+        return None
+    if not isinstance(data, dict):
+        return None
+    provider = str(data.get("provider", ""))
+    return {
+        "ok": True,
+        "mocked": "mock" in provider.lower(),
+        "payload": data,
+        "source": "vehicle-service",
+        "provider": provider,
+        "cache_hit": bool(data.get("cache_hit")),
+    }
+
+
+async def fetch_challans(plate: str, refresh: bool = False) -> dict:
+    # The microservice, when it is configured and answering, is authoritative.
+    via_service = await fetch_challans_via_service(plate, refresh=refresh)
+    if via_service is not None:
+        return via_service
+
     key, _, challan_host = _creds()
     if not (key and challan_host):
         # Fall back to RC host for challans when only one host is configured;
@@ -271,12 +328,17 @@ async def fetch_trace(plate_raw: str, db=None, refresh: bool = False) -> dict:
                          "cached": True, "cached_at": stored_at},
             }
     started = time.monotonic()
-    rc_res, ch_res = await asyncio.gather(fetch_rc(plate), fetch_challans(plate))
+    rc_res, ch_res = await asyncio.gather(fetch_rc(plate),
+                                          fetch_challans(plate, refresh=refresh))
     items, summary = parse_challans((ch_res.get("payload") if ch_res.get("ok") else None))
     ms = int((time.monotonic() - started) * 1000)
     ch_block = {"ok": ch_res.get("ok", False), "mocked": ch_res.get("mocked", False),
                 "error": ch_res.get("error"), "notice": ch_res.get("notice"),
                 "items": items, "summary": summary,
+                # Which path answered: the federated microservice or the
+                # in-process vendor call. Surfaced so an investigator can tell.
+                "source": ch_res.get("source", "in-process"),
+                "provider": ch_res.get("provider", ""),
                 "raw_status": (ch_res.get("payload") or {}).get("status") if isinstance(ch_res.get("payload"), dict) else None}
     if db is not None and (rc_res.get("ok") or ch_block.get("ok")):
         _cache_put(db, plate, rc_res, ch_block)

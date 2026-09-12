@@ -120,6 +120,52 @@ class Settings(BaseSettings):
     # again. Refresh (?refresh=true) bypasses it on demand.
     vehicle_trace_cache_ttl_s: int = 3600
 
+    # --- vehicle microservice federation ---
+    # When set, challan lookups are delegated to the standalone vehicle
+    # service (vehicle-service/, its own providers, cache and circuit breaker)
+    # instead of the in-process vendor call. Empty keeps everything in-process,
+    # so the platform still runs as a single deployable.
+    vehicle_service_url: str = ""
+    vehicle_service_timeout_s: float = 8.0
+
+    # --- crowd analytics ---
+    # People are already in the detector's output; the cascade simply filtered
+    # them out. Counting them costs one extra class slice, not another pass.
+    crowd_counting_enabled: bool = True
+    # Persist a count at most this often per camera, so a busy junction does
+    # not write a row per sampled frame.
+    crowd_sample_seconds: float = 5.0
+
+    # --- anomaly detection ---
+    anomaly_enabled: bool = True
+    # A surge fires when the count clears this floor AND this multiple of the
+    # camera's own rolling median. The floor stops an empty lane going from one
+    # person to three and calling it a crowd.
+    crowd_surge_min_people: int = 12
+    crowd_surge_ratio: float = 2.5
+    # Dwell time before a stationary person is called loitering, and the radius
+    # (fraction of frame width) they must stay inside to count as stationary.
+    loiter_seconds: float = 120.0
+    loiter_radius_frac: float = 0.06
+    # Suppress repeat anomalies of the same kind on one camera.
+    anomaly_dedup_seconds: float = 180.0
+
+    # --- batched inference ---
+    # Camera workers hand frames to one shared batcher rather than each calling
+    # the session directly. Serialises accelerator access and, when the model
+    # has a dynamic batch dimension, runs several frames per call.
+    inference_batching_enabled: bool = True
+    inference_batch_size: int = 4
+    # How long the batcher waits to fill a batch before running what it has.
+    inference_batch_wait_ms: int = 25
+
+    # --- alert bus ---
+    # Empty keeps the in-process socket fanout, which is correct for a single
+    # central instance. Set a Redis URL to fan alerts out across instances so
+    # the central tier can run behind a load balancer.
+    alert_bus_url: str = ""
+    alert_bus_channel: str = "sentinel.alerts"
+
     class Config:
         env_file = BASE_DIR / ".env"
         extra = "ignore"

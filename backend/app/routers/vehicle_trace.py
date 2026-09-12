@@ -34,12 +34,13 @@ async def rc(plate: str):
 
 
 @router.get("/{plate}/challans")
-async def challans(plate: str):
+async def challans(plate: str, refresh: bool = False):
     try:
         clean = svc.validate_plate_or_raise(plate)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
-    res = await svc.fetch_challans(clean)
+    res = await svc.fetch_challans(clean, refresh=refresh)
     items, summary = svc.parse_challans(res.get("payload") if res.get("ok") else None)
     return {"plate": clean, "ok": res.get("ok", False), "mocked": res.get("mocked", False),
-            "error": res.get("error"), "items": items, "summary": summary}
+            "error": res.get("error"), "items": items, "summary": summary,
+            "source": res.get("source", "in-process"), "provider": res.get("provider", "")}

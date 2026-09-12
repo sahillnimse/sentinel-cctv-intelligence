@@ -32,6 +32,13 @@ AWIROS_DICT = MODELS_DIR / "awiros_dict.txt"
 VEHICLE_CLASSES = (2, 3, 5, 7)  # car, motorcycle, bus, truck
 VEHICLE_LABELS = {2: "car", 3: "motorcycle", 5: "bus", 7: "truck"}
 VEHICLE_CONF = 0.25
+# People come out of the same forward pass; the cascade simply discarded them.
+# Crowd counting therefore costs one more slice of the score matrix, not
+# another inference. A higher floor than vehicles because distant partial
+# figures are where this detector invents people.
+PERSON_CLASS = 0
+PERSON_CONF = 0.35
+PERSON_MIN_SIDE = 18  # px in source frame; smaller boxes are noise, not people
 VEHICLE_INPUT = 960
 PLATE_MIN_WIDTH_SRC = 40   # px in source frame — below this, detection is noise
 OCR_MIN_WIDTH_SRC = 45     # below this OCR output is provably garbage on this footage
@@ -58,6 +65,22 @@ class VehicleDetection:
     plate: str                              # normalized plate text, "" if unread
     plate_confidence: float
     plate_box: tuple[int, int, int, int] | None
+
+
+@dataclass
+class SceneAnalysis:
+    """Everything one frame yielded: the vehicle log and the people in shot.
+
+    Both come from a single detector pass, so asking for people costs nothing
+    beyond the extra class slice.
+    """
+
+    vehicles: list[VehicleDetection]
+    persons: list[tuple[int, int, int, int]]  # person boxes, full-frame coords
+
+    @property
+    def person_count(self) -> int:
+        return len(self.persons)
 
 
 def available() -> bool:
@@ -137,38 +160,106 @@ def _letterbox(img, size):
     return canvas, r
 
 
-def _detect_vehicles(frame_bgr) -> list[tuple[tuple[int, int, int, int], str]]:
-    """Return [(box, label)] for detected vehicles in full-frame coords."""
+def preprocess(frame_bgr):
+    """Frame -> (CHW float blob, letterbox ratio). Public so the batcher can
+    prepare frames on the calling worker's thread and hand over only tensors."""
+    img, r = _letterbox(frame_bgr, VEHICLE_INPUT)
+    blob = img[:, :, ::-1].transpose(2, 0, 1).astype(np.float32) / 255.0
+    return blob, r
+
+
+def vehicle_batch_dim_is_dynamic() -> bool:
+    """True when the exported model accepts more than one image per call.
+
+    Most YOLO exports pin batch to 1. Asking rather than assuming means the
+    batcher degrades to sequential execution instead of throwing on the first
+    frame of a live deployment.
+    """
+    if _vehicle_sess is None:
+        return False
+    try:
+        dim = _vehicle_sess.get_inputs()[0].shape[0]
+    except Exception:
+        return False
+    return not isinstance(dim, int) or dim < 1
+
+
+def run_vehicle_blobs(blobs: list) -> list:
+    """Run the detector over prepared blobs, returning one (84, N) output each.
+
+    Batches into a single call when the model allows it, otherwise loops. The
+    caller sees the same result either way.
+    """
+    _ensure_loaded()
+    if _vehicle_sess is None:
+        return [None] * len(blobs)
+    name = _vehicle_sess.get_inputs()[0].name
+    if len(blobs) > 1 and vehicle_batch_dim_is_dynamic():
+        stacked = np.stack(blobs).astype(np.float32)
+        out = _vehicle_sess.run(None, {name: stacked})[0]
+        return [out[i] for i in range(out.shape[0])]
+    return [_vehicle_sess.run(None, {name: b[None].astype(np.float32)})[0][0]
+            for b in blobs]
+
+
+def _decode(out, r, frame_shape, class_ids, conf_thresh, min_side):
+    """YOLO11 head (84, N) -> [(box, class_id)] in full-frame coords.
+
+    Rows 0-3 are cxcywh, rows 4-83 are per-class scores. Non-maximum
+    suppression runs per class group, so people and vehicles never suppress
+    each other.
+    """
     import cv2
 
-    img, r = _letterbox(frame_bgr, VEHICLE_INPUT)
-    blob = img[:, :, ::-1].transpose(2, 0, 1)[None].astype(np.float32) / 255.0
-    out = _vehicle_sess.run(None, {_vehicle_sess.get_inputs()[0].name: blob})[0][0]
-    # YOLO11 head: (84, N) -> rows 0-3 cxcywh, rows 4-83 class scores
+    if out is None:
+        return []
     boxes_cxcywh = out[:4].T
-    all_scores = out[4:].T
-    veh_scores = all_scores[:, VEHICLE_CLASSES]
-    conf = veh_scores.max(axis=1)
-    cls_ids = np.array(VEHICLE_CLASSES)[veh_scores.argmax(axis=1)]
-    keep = conf >= VEHICLE_CONF
+    scores = out[4:].T[:, list(class_ids)]
+    conf = scores.max(axis=1)
+    cls = np.array(class_ids)[scores.argmax(axis=1)]
+    keep = conf >= conf_thresh
     if not keep.any():
         return []
-    boxes_cxcywh, conf, cls_ids = boxes_cxcywh[keep], conf[keep], cls_ids[keep]
+    boxes_cxcywh, conf, cls = boxes_cxcywh[keep], conf[keep], cls[keep]
     xywh = np.column_stack([
         boxes_cxcywh[:, 0] - boxes_cxcywh[:, 2] / 2,
         boxes_cxcywh[:, 1] - boxes_cxcywh[:, 3] / 2,
         boxes_cxcywh[:, 2], boxes_cxcywh[:, 3],
     ])
-    idx = cv2.dnn.NMSBoxes(xywh.tolist(), conf.tolist(), VEHICLE_CONF, 0.45)
-    h, w = frame_bgr.shape[:2]
-    result = []
+    idx = cv2.dnn.NMSBoxes(xywh.tolist(), conf.tolist(), float(conf_thresh), 0.45)
+    if idx is None or len(idx) == 0:
+        return []
+    h, w = frame_shape[:2]
+    out_boxes = []
     for i in np.array(idx).flatten():
         x, y, bw, bh = xywh[i] / r
         x1, y1 = max(int(x), 0), max(int(y), 0)
         x2, y2 = min(int(x + bw), w), min(int(y + bh), h)
-        if x2 - x1 > 40 and y2 - y1 > 40:
-            result.append(((x1, y1, x2, y2), VEHICLE_LABELS.get(int(cls_ids[i]), "vehicle")))
-    return result
+        if x2 - x1 > min_side and y2 - y1 > min_side:
+            out_boxes.append(((x1, y1, x2, y2), int(cls[i])))
+    return out_boxes
+
+
+def decode_objects(out, r, frame_shape):
+    """One detector output -> (vehicles, persons)."""
+    vehicles = [(box, VEHICLE_LABELS.get(cid, "vehicle"))
+                for box, cid in _decode(out, r, frame_shape, VEHICLE_CLASSES,
+                                        VEHICLE_CONF, 40)]
+    persons = [box for box, _ in _decode(out, r, frame_shape, (PERSON_CLASS,),
+                                         PERSON_CONF, PERSON_MIN_SIDE)]
+    return vehicles, persons
+
+
+def _detect_objects(frame_bgr):
+    """Single forward pass -> (vehicles, persons)."""
+    blob, r = preprocess(frame_bgr)
+    out = run_vehicle_blobs([blob])[0]
+    return decode_objects(out, r, frame_bgr.shape)
+
+
+def _detect_vehicles(frame_bgr) -> list[tuple[tuple[int, int, int, int], str]]:
+    """Return [(box, label)] for detected vehicles in full-frame coords."""
+    return _detect_objects(frame_bgr)[0]
 
 
 # --- Stage 2: plate detection on vehicle crops ------------------------------
@@ -285,14 +376,21 @@ def _best_plate_read(frame_bgr, plate_boxes, min_confidence):
 
 # --- Public API -------------------------------------------------------------
 
-def analyze(frame_bgr: np.ndarray, min_confidence: float = 0.5) -> list[VehicleDetection]:
-    """Detect every vehicle and its best plate. This is the full vehicle log:
-    vehicles with no readable plate are still returned (plate="")."""
+def analyze_scene(frame_bgr: np.ndarray, min_confidence: float = 0.5,
+                  objects=None) -> SceneAnalysis:
+    """Full scene read: every vehicle with its best plate, plus the people.
+
+    `objects` accepts an already-decoded (vehicles, persons) pair so the shared
+    batcher can run the detector once for several cameras and hand the result
+    back here. Left as None, this runs the detector itself.
+    """
     _ensure_loaded()
     results: list[VehicleDetection] = []
+    persons: list[tuple[int, int, int, int]] = []
 
     if _vehicle_sess is not None:
-        for vbox, label in _detect_vehicles(frame_bgr):
+        vehicles, persons = objects if objects is not None else _detect_objects(frame_bgr)
+        for vbox, label in vehicles:
             plate_boxes = _detect_plates_on_vehicle(frame_bgr, vbox)
             text, conf, pbox = _best_plate_read(frame_bgr, plate_boxes, min_confidence)
             results.append(VehicleDetection(
@@ -300,7 +398,9 @@ def analyze(frame_bgr: np.ndarray, min_confidence: float = 0.5) -> list[VehicleD
                 plate_confidence=conf, plate_box=pbox,
             ))
     else:
-        # no vehicle model: fall back to plate-only detection, one "vehicle" per plate
+        # No vehicle model: plate-only detection, one "vehicle" per plate. There
+        # is no person channel in this path, so crowd counting reports nothing
+        # rather than guessing.
         for det_conf, pbox in _detect_tiled_fallback(frame_bgr):
             text, conf, rbox = _best_plate_read(frame_bgr, [(det_conf, pbox)], min_confidence)
             if text:
@@ -308,7 +408,13 @@ def analyze(frame_bgr: np.ndarray, min_confidence: float = 0.5) -> list[VehicleD
                     vehicle_type="vehicle", box=pbox, plate=text,
                     plate_confidence=conf, plate_box=rbox,
                 ))
-    return results
+    return SceneAnalysis(vehicles=results, persons=persons)
+
+
+def analyze(frame_bgr: np.ndarray, min_confidence: float = 0.5) -> list[VehicleDetection]:
+    """Detect every vehicle and its best plate. This is the full vehicle log:
+    vehicles with no readable plate are still returned (plate="")."""
+    return analyze_scene(frame_bgr, min_confidence).vehicles
 
 
 def read_plates(frame_bgr: np.ndarray, min_confidence: float = 0.5) -> list[PlateRead]:

@@ -14,17 +14,19 @@ the abstraction.
 
 import shutil
 import time
+from collections import Counter
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from ..anpr import pipeline
+from .. import ws
+from ..anpr import batcher, pipeline
 from ..anpr.worker import worker_status
 from ..config import settings
 from ..db import get_db
-from ..models import Alert, Camera, Sighting, VehicleDetection
+from ..models import Alert, Anomaly, Camera, Sighting, VehicleDetection
 
 router = APIRouter(tags=["ops"])
 
@@ -122,8 +124,15 @@ def metrics(db: Session = Depends(get_db)):
     plates_1h = db.query(Sighting).filter(Sighting.ts >= hour_ago).count()
     alerts_open = db.query(Alert).filter(Alert.acknowledged.is_(False)).count()
 
+    anomalies_open = db.query(Anomaly).filter(Anomaly.acknowledged.is_(False)).count()
+    anomalies_1h = Counter(
+        a.kind for a in db.query(Anomaly).filter(Anomaly.ts >= hour_ago).all())
+    people_now = sum(w.get("person_count", 0) for w in workers)
+
     disk = _check_disk()
     edge_state = _check_edge()
+    batch_stats = batcher.stats()
+    bus = ws.bus_status()
 
     lines = [
         "# HELP sentinel_uptime_seconds Time since this node started.",
@@ -170,5 +179,33 @@ def metrics(db: Session = Depends(get_db)):
         "# HELP sentinel_edge_uplink_online Whether the edge uplink is reachable.",
         "# TYPE sentinel_edge_uplink_online gauge",
         f"sentinel_edge_uplink_online {1 if edge_state.get('uplink_online', True) else 0}",
+
+        "# HELP sentinel_people_now People currently in frame across reporting cameras.",
+        "# TYPE sentinel_people_now gauge",
+        f"sentinel_people_now {people_now}",
+
+        "# HELP sentinel_anomalies_open Anomalies awaiting acknowledgement.",
+        "# TYPE sentinel_anomalies_open gauge",
+        f"sentinel_anomalies_open {anomalies_open}",
+
+        "# HELP sentinel_anomalies_1h Anomalies raised in the last hour, by kind.",
+        "# TYPE sentinel_anomalies_1h gauge",
+        *(f'sentinel_anomalies_1h{{kind="{k}"}} {n}' for k, n in anomalies_1h.items()),
+
+        "# HELP sentinel_inference_batches_total Batched detector calls since start.",
+        "# TYPE sentinel_inference_batches_total counter",
+        f"sentinel_inference_batches_total {batch_stats['batches']}",
+
+        "# HELP sentinel_inference_frames_total Frames run through the detector since start.",
+        "# TYPE sentinel_inference_frames_total counter",
+        f"sentinel_inference_frames_total {batch_stats['frames']}",
+
+        "# HELP sentinel_inference_mean_batch Mean frames per detector call.",
+        "# TYPE sentinel_inference_mean_batch gauge",
+        f"sentinel_inference_mean_batch {batch_stats['mean_batch']}",
+
+        "# HELP sentinel_alert_bus_connected Whether the shared alert bus is connected.",
+        "# TYPE sentinel_alert_bus_connected gauge",
+        f"sentinel_alert_bus_connected {1 if bus.get('connected') else 0}",
     ]
     return Response(content="\n".join(lines) + "\n", media_type="text/plain; version=0.0.4")

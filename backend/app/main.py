@@ -14,8 +14,8 @@ from .config import settings
 from .db import engine
 from .models import Base, Camera, User, has_stream
 from .db import SessionLocal
-from .routers import (adapters, alerts, analytics, auth, cameras, copilot, demo,
-                      edge, evidence, fleet, integrations, ops, reports,
+from .routers import (adapters, alerts, analytics, auth, cameras, copilot, crowd,
+                      demo, edge, evidence, fleet, integrations, ops, reports,
                       sightings, streams, users, vahan, vehicle_trace, vehicles, watchlist)
 
 log = logging.getLogger("sentinel")
@@ -95,10 +95,15 @@ def prune_older_than(db, cutoff: datetime) -> dict[str, int]:
     window just because it is a cache. A row is dropped once it is past its
     TTL — nothing will ever serve it again — and never outlives the window
     even if the TTL is set longer than the window.
+
+    Crowd counts prune on age alone. Anomalies follow the alert rule instead:
+    an unacknowledged anomaly is outstanding work and survives regardless of
+    age, so housekeeping cannot quietly clear something nobody has looked at.
     """
     from datetime import timedelta
 
-    from .models import Alert, Sighting, VehicleDetection, VehicleTraceCache
+    from .models import (Alert, Anomaly, CrowdCount, Sighting, VehicleDetection,
+                         VehicleTraceCache)
 
     stale_sightings = db.query(Sighting.id).filter(Sighting.ts < cutoff).subquery()
     alerts = (db.query(Alert)
@@ -117,6 +122,16 @@ def prune_older_than(db, cutoff: datetime) -> dict[str, int]:
                   .filter(VehicleDetection.ts < cutoff)
                   .delete(synchronize_session=False))
 
+    crowd = (db.query(CrowdCount)
+             .filter(CrowdCount.ts < cutoff)
+             .delete(synchronize_session=False))
+
+    # An unacknowledged anomaly is outstanding work, exactly like an
+    # unacknowledged alert, so age alone does not clear it.
+    anomalies = (db.query(Anomaly)
+                 .filter(Anomaly.ts < cutoff, Anomaly.acknowledged.is_(True))
+                 .delete(synchronize_session=False))
+
     ttl_cutoff = datetime.utcnow() - timedelta(
         seconds=max(60, settings.vehicle_trace_cache_ttl_s))
     traces = (db.query(VehicleTraceCache)
@@ -124,7 +139,7 @@ def prune_older_than(db, cutoff: datetime) -> dict[str, int]:
               .delete(synchronize_session=False))
     db.commit()
     return {"alerts": alerts, "sightings": sightings, "detections": detections,
-            "traces": traces}
+            "traces": traces, "crowd": crowd, "anomalies": anomalies}
 
 
 def _autostart_workers():
@@ -219,10 +234,17 @@ async def lifespan(app: FastAPI):
     _migrate()
     _seed_accounts()
     ws.set_loop(asyncio.get_running_loop())
+    # Shared alert fanout, when configured. Never fatal: an unreachable bus
+    # leaves the in-process fanout in place rather than blocking boot.
+    await ws.start_bus()
     from . import edge as edge_tier
     edge_tier.start()
     from .agent import plate_llm
     plate_llm.start()
+    # One collector in front of the detector, so N camera threads stop
+    # contending for the accelerator.
+    from .anpr import batcher
+    batcher.start()
     _retention_prune()
     if settings.demo_simulate:
         from . import sim
@@ -231,6 +253,9 @@ async def lifespan(app: FastAPI):
         _autostart_workers()
     yield
     stop_all()
+    from .anpr import batcher
+    batcher.stop()
+    await ws.stop_bus()
     from . import edge as edge_tier
     edge_tier.stop()
 
@@ -395,7 +420,7 @@ async def rbac_and_audit(request, call_next):
 for r in (auth.router, cameras.router, watchlist.router, sightings.router,
           alerts.router, streams.router, copilot.router, vehicles.router,
           vahan.router, vehicle_trace.router, evidence.router, demo.router, fleet.router,
-          analytics.router, edge.router, adapters.router,
+          analytics.router, crowd.router, edge.router, adapters.router,
           integrations.router, reports.router, ops.router, users.router):
     app.include_router(r, prefix="/api")
 
