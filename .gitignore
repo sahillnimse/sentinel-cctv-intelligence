@@ -141,3 +141,17 @@ pnpm-debug.log*
 Thumbs.db
 ehthumbs.db
 desktop.ini
+
+# --- Presentations, Office Documents & Local Assets --------------------------
+PPTs/
+*.pptx
+*.ppt
+*.docx
+*.doc
+*.xlsx
+*.xls
+*.pdf
+# Office temp/lock files
+~$*.pptx
+~$*.docx
+~$*.xlsx
