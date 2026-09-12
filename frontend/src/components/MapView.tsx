@@ -1,5 +1,6 @@
-import { MapContainer, TileLayer, CircleMarker, Polyline, Popup, useMap } from 'react-leaflet'
-import { useEffect } from 'react'
+import { MapContainer, TileLayer, CircleMarker, Marker, Polyline, Popup, useMap } from 'react-leaflet'
+import { useEffect, useMemo } from 'react'
+import L from 'leaflet'
 import type { LatLngExpression } from 'leaflet'
 import { cssVar, useTheme } from '../theme'
 
@@ -11,6 +12,15 @@ export type Pin = {
   sub?: string
   colour?: string
   radius?: number
+}
+
+/** Live alert overlay: rendered as a pulsing red dot above the base pins. */
+export type AlertPin = {
+  id: number | string
+  lat: number
+  lng: number
+  label: string
+  sub?: string
 }
 
 // Gandhinagar, roughly the centre of the grid.
@@ -29,16 +39,24 @@ function FitTo({ pins }: { pins: Pin[] }) {
   return null
 }
 
-export default function MapView({ pins, path, tall }: { pins: Pin[]; path?: Pin[]; tall?: boolean }) {
+export default function MapView({ pins, path, tall, square, rect, alertPins, zoom }: { pins: Pin[]; path?: Pin[]; tall?: boolean; square?: boolean; rect?: boolean; alertPins?: AlertPin[]; zoom?: number }) {
   // Leaflet paints into SVG attributes from JavaScript, so it cannot read a
   // custom property. Subscribing to the theme re-renders this with the new
   // palette resolved rather than leaving stale colours on the map.
   const { theme } = useTheme()
   const base = cssVar('--primary', '#2f4858')
+  const bad = cssVar('--bad', '#c8322b')
+  const alerts = useMemo(() => (alertPins ?? []).filter((a) => a.lat && a.lng), [alertPins])
+  const alertIcon = useMemo(() => L.divIcon({
+    className: 'alert-pin-wrap',
+    html: '<span class="alert-pin"></span>',
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
+  }), [])
 
   return (
-    <div className={tall ? 'map tall' : 'map'}>
-      <MapContainer key={theme} center={FALLBACK} zoom={11} style={{ height: '100%', width: '100%' }}>
+    <div className={tall ? 'map tall' : rect ? 'map rect' : square ? 'map square' : 'map'}>
+      <MapContainer key={theme} center={FALLBACK} zoom={zoom ?? 11} style={{ height: '100%', width: '100%' }}>
         <TileLayer
           url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; OpenStreetMap contributors'
@@ -56,6 +74,14 @@ export default function MapView({ pins, path, tall }: { pins: Pin[]; path?: Pin[
               {p.sub && <><br /><span style={{ fontSize: 12 }}>{p.sub}</span></>}
             </Popup>
           </CircleMarker>
+        ))}
+        {alerts.map((a) => (
+          <Marker key={`alert-${a.id}`} position={[a.lat, a.lng]} icon={alertIcon}>
+            <Popup>
+              <strong style={{ color: bad }}>{a.label}</strong>
+              {a.sub && <><br /><span style={{ fontSize: 12 }}>{a.sub}</span></>}
+            </Popup>
+          </Marker>
         ))}
       </MapContainer>
     </div>

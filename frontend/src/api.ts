@@ -331,6 +331,22 @@ export const ROLE_SCOPE: Record<Role, string> = {
   admin: 'change the camera registry and onboard systems',
 }
 
+/** Mask a plate for low-privilege roles: keep the state/district prefix,
+ *  hide the tail. `GJ01AB1234` -> `GJ01AB****`. Short/odd values degrade to
+ *  a fixed mask rather than leaking length games. */
+export function maskPlate(plate: string | null | undefined): string {
+  if (!plate) return '····'
+  const p = String(plate).trim().toUpperCase()
+  if (p.length <= 4) return '****'
+  return `${p.slice(0, 6)}****`
+}
+
+/** True when the socket frame is a watchlist alert (the only thing the
+ *  command-center Live Intelligence Stream shows). */
+export function isAlertEvent(e: any): boolean {
+  return !!e && (e.type === 'alert' || (typeof e.plate === 'string' && typeof e.reason === 'string' && e.type !== 'anomaly'))
+}
+
 export type ErrorKind = 'permission' | 'signin' | 'notfound' | 'server' | 'network'
 
 export class ApiError extends Error {

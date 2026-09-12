@@ -501,6 +501,9 @@ h2 {
   gap: 12px;
   margin-bottom: 18px;
 }
+/* Duo KPI row inside the mid-wall left column: the two cards split the
+   column evenly, consuming its whitespace without going full-width big. */
+.cards.duo { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 
 .card {
   background: var(--surface);
@@ -603,9 +606,22 @@ h2 {
   gap: 16px;
   align-items: start;
 }
+/* Mid wall: left stacks crowd KPIs + both charts, right is the tall alert
+   map starting at the same row. Cells stretch so the map rectangle fills
+   the full height of the left stack. */
+.noc-mid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: stretch;
+}
+/* Fill panel for the map cell: column layout so the map takes the slack.
+   No explicit height — the stretched grid cell fills it while preserving
+   the panel's bottom margin, so the gap below matches every other panel. */
+.panel.fill { display: flex; flex-direction: column; }
 
 @media (max-width: 1180px) {
-  .split, .split-even { grid-template-columns: minmax(0, 1fr); }
+  .split, .split-even, .noc-mid { grid-template-columns: minmax(0, 1fr); }
 }
 
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -770,6 +786,34 @@ tbody tr:nth-child(n+9) { animation-delay: 220ms }
 
 .spark-plates   { background: var(--accent); border-radius: 0 0 2px 2px; }
 .spark-vehicles { background: var(--chart-dim); border-radius: 2px 2px 0 0; }
+
+/* Grouped bars: two metrics side by side per bucket instead of stacked, so
+   both series stay visible. The bucket is bottom-anchored; each bar carries
+   its own gradient + hover lift. */
+.spark.tall.grouped > .group-col {
+  background: transparent;
+  opacity: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 2px;
+  border-radius: 0;
+  min-height: 0;
+}
+.spark.tall.grouped > .group-col:hover { opacity: 1; }
+.gbar {
+  flex: 1 1 0;
+  min-width: 2px;
+  min-height: 0;
+  border-radius: 2px 2px 0 0;
+  transition: height .5s cubic-bezier(.2,.8,.3,1), filter .15s ease;
+}
+.gbar:hover { filter: brightness(1.12); }
+.gbar.vehicles { background: linear-gradient(180deg, color-mix(in srgb, var(--primary) 68%, #fff), var(--primary)); }
+.gbar.plates   { background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 65%, #fff), var(--accent)); box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 45%, transparent); }
+.gbar.people   { background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 65%, #fff), var(--accent)); box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 45%, transparent); }
+.gbar.samples  { background: linear-gradient(180deg, color-mix(in srgb, var(--chart-dim) 55%, #fff), var(--chart-dim)); opacity: .85; }
 
 
 /* ==========================================================================
@@ -1103,6 +1147,28 @@ button.chip.active {
 
 .map { height: 440px; border-radius: var(--r-sm); overflow: hidden; border: 1px solid var(--line); }
 .map.tall { height: 560px; }
+/* Command-center alert square: right-rail footprint, still tall enough to
+   orient. Blinking alert dots are DivIcons, so they need explicit paint. */
+.map.square { height: 260px; }
+/* Command-center map rectangle: fills the right cell beside the stacked
+   charts, so it reads as one wall panel rather than a small square. */
+.map.rect { flex: 1; height: auto; min-height: 480px; }
+
+.alert-pin-wrap { background: transparent; border: none; }
+.alert-pin {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--bad, #c8322b);
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bad, #c8322b) 35%, transparent);
+  animation: alert-blink 1.2s ease-in-out infinite;
+}
+@keyframes alert-blink {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(1.5); }
+}
 
 /* Plain OpenStreetMap tiles, which need no key and carry no vendor mark. The
    console is light now, so they are used as they ship, unfiltered. */
@@ -1141,6 +1207,9 @@ button.chip.active {
   max-height: calc(100vh - 240px);
   overflow-y: auto;
 }
+/* Command-center rail stream under the alert map: bounded so the map stays
+   visible, newest first. */
+.event-list.stream { max-height: 320px; }
 
 .event-card {
   background: var(--surface);
@@ -1332,16 +1401,16 @@ button.chip.active {
   display: block;
 }
 
-/* The artwork is bright and busy. Without this the card's own translucency
-   cannot hold pale text against it, so the scrim is what keeps the labels
-   legible rather than the card's opacity. */
+/* The artwork is bright and busy. This dims the whole scene like the
+   reference (dark overlay), so white card text stays legible while the
+   city still shows through the frosted card. */
 .login-scene-scrim {
   position: absolute;
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(ellipse 52% 58% at 50% 50%, rgba(6, 12, 20, 0.62) 0%, rgba(6, 12, 20, 0.30) 58%, rgba(6, 12, 20, 0.12) 100%),
-    linear-gradient(to bottom, rgba(6, 12, 20, 0.34) 0%, rgba(6, 12, 20, 0) 26%, rgba(6, 12, 20, 0) 72%, rgba(6, 12, 20, 0.42) 100%);
+    radial-gradient(ellipse 60% 65% at 50% 45%, rgba(5, 10, 18, 0.52) 0%, rgba(5, 10, 18, 0.42) 60%, rgba(5, 10, 18, 0.38) 100%),
+    linear-gradient(to bottom, rgba(5, 10, 18, 0.55) 0%, rgba(5, 10, 18, 0.28) 30%, rgba(5, 10, 18, 0.28) 70%, rgba(5, 10, 18, 0.6) 100%);
 }
 
 .login-card-wrap {
@@ -1358,21 +1427,22 @@ button.chip.active {
   display: flex;
   flex-direction: column;
   padding: 30px 30px 22px;
-  background: rgba(9, 17, 30, 0.74);
-  backdrop-filter: blur(22px) saturate(115%);
-  -webkit-backdrop-filter: blur(22px) saturate(115%);
-  /* One hairline in the accent, and a single soft highlight along the top
-     edge. Square-ish corners read as instrumentation rather than marketing. */
-  border: 1px solid rgba(95, 216, 232, 0.22);
+  /* Reference-level frosted glass: city faintly visible, text fully readable. */
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.09));
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  /* Light hairline + soft top highlight, square-ish instrumental corners. */
+  border: 1px solid rgba(255, 255, 255, 0.38);
   border-radius: 4px;
   box-shadow:
-    0 30px 70px rgba(2, 6, 12, 0.62),
-    inset 0 1px 0 rgba(158, 230, 240, 0.14);
-  color: #e6eef6;
+    0 30px 70px rgba(2, 6, 12, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  color: #ffffff;
+  text-shadow: 0 1px 14px rgba(0, 0, 0, 0.45);
 }
 
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .login-card { background: rgba(9, 17, 30, 0.95); }
+  .login-card { background: rgba(18, 30, 45, 0.82); }
 }
 
 .login-brand {
@@ -1381,7 +1451,7 @@ button.chip.active {
   gap: 12px;
   padding-bottom: 20px;
   margin-bottom: 22px;
-  border-bottom: 1px solid rgba(158, 230, 240, 0.12);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.22);
 }
 
 .login-brand-mark {
@@ -1391,9 +1461,9 @@ button.chip.active {
   display: grid;
   place-items: center;
   border-radius: 3px;
-  color: #5fd8e8;
-  background: rgba(95, 216, 232, 0.12);
-  border: 1px solid rgba(95, 216, 232, 0.35);
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.4);
 }
 
 .login-brand-name {
@@ -1401,7 +1471,7 @@ button.chip.active {
   font-size: 17px;
   font-weight: 600;
   letter-spacing: 0.3em;
-  color: #f2f8fb;
+  color: #ffffff;
 }
 
 .login-brand-sub {
@@ -1409,7 +1479,7 @@ button.chip.active {
   font-size: 10px;
   letter-spacing: 0.11em;
   text-transform: uppercase;
-  color: rgba(190, 214, 232, 0.62);
+  color: rgba(255, 255, 255, 0.75);
 }
 
 .login-card label {
@@ -1420,7 +1490,7 @@ button.chip.active {
   font-weight: 500;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: rgba(95, 216, 232, 0.78);
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .login-card input {
@@ -1428,20 +1498,21 @@ button.chip.active {
   margin-bottom: 18px;
   padding: 11px 13px;
   font-size: 13.5px;
-  color: #f2f8fb;
-  background: rgba(4, 10, 20, 0.55);
-  border: 1px solid rgba(158, 230, 240, 0.16);
+  color: #ffffff;
+  text-shadow: none;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 3px;
   transition: border-color .15s, box-shadow .15s, background .15s;
 }
 
-.login-card input::placeholder { color: rgba(190, 214, 232, 0.34); }
+.login-card input::placeholder { color: rgba(255, 255, 255, 0.55); }
 
 .login-card input:focus {
   outline: none;
-  background: rgba(4, 10, 20, 0.75);
-  border-color: rgba(95, 216, 232, 0.75);
-  box-shadow: 0 0 0 3px rgba(95, 216, 232, 0.13);
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.75);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.18);
 }
 
 .login-card .pw-wrap { position: relative; margin-bottom: 18px; }
@@ -1460,11 +1531,11 @@ button.chip.active {
   background: transparent;
   border: none;
   border-radius: 3px;
-  color: rgba(190, 214, 232, 0.55);
+  color: rgba(255, 255, 255, 0.7);
   cursor: pointer;
 }
 
-.login-card .pw-toggle:hover { color: #5fd8e8; }
+.login-card .pw-toggle:hover { color: #ffffff; }
 
 .login-submit {
   width: 100%;
@@ -1476,6 +1547,7 @@ button.chip.active {
   letter-spacing: 0.13em;
   text-transform: uppercase;
   color: #041018;
+  text-shadow: none;
   background: #5fd8e8;
   border: 1px solid #5fd8e8;
   border-radius: 3px;
@@ -1496,9 +1568,10 @@ button.chip.active {
   border-radius: 3px;
   font-size: 12px;
   line-height: 1.5;
-  color: #ffdfae;
-  background: rgba(240, 166, 75, 0.1);
-  border-left: 2px solid rgba(240, 166, 75, 0.75);
+  text-shadow: none;
+  color: #ffe3b3;
+  background: rgba(0, 0, 0, 0.38);
+  border-left: 2px solid rgba(240, 166, 75, 0.9);
 }
 
 .login-err {
@@ -1506,9 +1579,10 @@ button.chip.active {
   padding: 10px 12px;
   border-radius: 3px;
   font-size: 12.5px;
-  color: #ffc4b8;
-  background: rgba(214, 68, 46, 0.14);
-  border-left: 2px solid rgba(214, 68, 46, 0.8);
+  text-shadow: none;
+  color: #ffc9bd;
+  background: rgba(0, 0, 0, 0.38);
+  border-left: 2px solid rgba(214, 68, 46, 0.9);
 }
 
 .login-links {
@@ -1523,7 +1597,7 @@ button.chip.active {
   width: 3px;
   height: 3px;
   border-radius: 50%;
-  background: rgba(190, 214, 232, 0.3);
+  background: rgba(255, 255, 255, 0.45);
 }
 
 .login-links button {
@@ -1531,22 +1605,22 @@ button.chip.active {
   background: transparent;
   border: none;
   font-size: 11.5px;
-  color: rgba(190, 214, 232, 0.62);
+  color: rgba(255, 255, 255, 0.8);
   cursor: pointer;
   transition: color .15s;
 }
 
-.login-links button:hover { color: #5fd8e8; }
+.login-links button:hover { color: #ffffff; }
 
 .login-legal {
   margin-top: 22px;
   padding-top: 15px;
-  border-top: 1px solid rgba(158, 230, 240, 0.12);
+  border-top: 1px solid rgba(255, 255, 255, 0.22);
   text-align: center;
   font-size: 9px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: rgba(190, 214, 232, 0.4);
+  color: rgba(255, 255, 255, 0.65);
 }
 
 .login-close {
@@ -1560,14 +1634,14 @@ button.chip.active {
   padding: 0;
   background: transparent;
   border: none;
-  color: rgba(190, 214, 232, 0.5);
+  color: rgba(255, 255, 255, 0.7);
   font-size: 13px;
   cursor: pointer;
 }
 
-.login-close:hover { color: #f2f8fb; }
+.login-close:hover { color: #ffffff; }
 
-.login-card :focus-visible { outline: 2px solid #5fd8e8; outline-offset: 2px; }
+.login-card :focus-visible { outline: 2px solid #ffffff; outline-offset: 2px; }
 
 /* In the header modal the artwork is unnecessary — the modal supplies its own
    backdrop, and a second one behind it would compete. */
