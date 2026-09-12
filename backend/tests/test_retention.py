@@ -11,7 +11,8 @@ from datetime import datetime, timedelta
 import pytest
 
 from app.main import prune_older_than
-from app.models import Alert, Base, Camera, Sighting, VehicleDetection, WatchlistEntry
+from app.models import (Alert, Base, Camera, Sighting, VehicleDetection,
+                        VehicleTraceCache, WatchlistEntry)
 
 
 @pytest.fixture
@@ -97,10 +98,56 @@ class TestPrune:
     def test_returns_counts(self, db):
         _fixture(db, age_days=2, acknowledged=True)
         counts = prune_older_than(db, datetime.utcnow() - timedelta(days=1))
-        assert set(counts) == {"alerts", "sightings", "detections"}
+        assert set(counts) == {"alerts", "sightings", "detections", "traces"}
         assert counts["alerts"] == 1
         assert counts["sightings"] == 1
 
     def test_empty_database_is_safe(self, db):
         assert prune_older_than(db, datetime.utcnow()) == {
-            "alerts": 0, "sightings": 0, "detections": 0}
+            "alerts": 0, "sightings": 0, "detections": 0, "traces": 0}
+
+
+class TestTraceCacheRetention:
+    """A cached vendor trace is RTO data about a named owner that we did not
+    collect ourselves. Caching it to avoid re-billing the vendor is fine;
+    keeping it forever is not.
+    """
+
+    def _cached(self, db, *, age_hours: float, plate="GJ01AB1234"):
+        db.add(VehicleTraceCache(
+            plate=plate, rc_json='{"owner_name": "RAHUL VERMA"}',
+            challans_json="{}",
+            updated_at=datetime.utcnow() - timedelta(hours=age_hours)))
+        db.commit()
+        return plate
+
+    def test_row_past_its_ttl_is_dropped(self, db):
+        # Default TTL is an hour, so a two-hour-old row can never be served
+        # again — it is only PII sitting in the table.
+        plate = self._cached(db, age_hours=2)
+
+        counts = prune_older_than(db, datetime.utcnow() - timedelta(days=1))
+        db.expunge_all()
+
+        assert counts["traces"] == 1
+        assert db.get(VehicleTraceCache, plate) is None
+
+    def test_fresh_row_survives(self, db):
+        plate = self._cached(db, age_hours=0)
+
+        counts = prune_older_than(db, datetime.utcnow() - timedelta(days=1))
+        db.expunge_all()
+
+        assert counts["traces"] == 0
+        assert db.get(VehicleTraceCache, plate) is not None,             "pruning threw away a cache entry that was still serving"
+
+    def test_long_ttl_does_not_outlive_the_retention_window(self, db, monkeypatch):
+        from app.main import settings
+
+        monkeypatch.setattr(settings, "vehicle_trace_cache_ttl_s", 30 * 86400)
+        plate = self._cached(db, age_hours=48)
+
+        prune_older_than(db, datetime.utcnow() - timedelta(days=1))
+        db.expunge_all()
+
+        assert db.get(VehicleTraceCache, plate) is None,             "a generous cache TTL exempted owner data from the retention window"

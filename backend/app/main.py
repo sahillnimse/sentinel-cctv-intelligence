@@ -81,16 +81,24 @@ def _retention_prune():
 
 
 def prune_older_than(db, cutoff: datetime) -> dict[str, int]:
-    """Drop detections and sightings older than `cutoff`, and the alerts that
-    reference them.
+    """Drop detections, sightings and cached vendor traces older than
+    `cutoff`, and the alerts that reference them.
 
     Alerts must go first. An alert carries sighting_id, and its evidence is the
     sighting's snapshot; deleting the sighting alone leaves an alert pointing at
     a row that no longer exists, which the alerts view then renders with no
     evidence behind it. Anything an operator has not acknowledged is kept
     regardless of age — an outstanding alert is not housekeeping.
+
+    Cached vendor traces go too. That table holds RTO data about named owners
+    that we did not collect ourselves, so it is not exempt from the retention
+    window just because it is a cache. A row is dropped once it is past its
+    TTL — nothing will ever serve it again — and never outlives the window
+    even if the TTL is set longer than the window.
     """
-    from .models import Alert, Sighting, VehicleDetection
+    from datetime import timedelta
+
+    from .models import Alert, Sighting, VehicleDetection, VehicleTraceCache
 
     stale_sightings = db.query(Sighting.id).filter(Sighting.ts < cutoff).subquery()
     alerts = (db.query(Alert)
@@ -108,8 +116,15 @@ def prune_older_than(db, cutoff: datetime) -> dict[str, int]:
     detections = (db.query(VehicleDetection)
                   .filter(VehicleDetection.ts < cutoff)
                   .delete(synchronize_session=False))
+
+    ttl_cutoff = datetime.utcnow() - timedelta(
+        seconds=max(60, settings.vehicle_trace_cache_ttl_s))
+    traces = (db.query(VehicleTraceCache)
+              .filter(VehicleTraceCache.updated_at < max(cutoff, ttl_cutoff))
+              .delete(synchronize_session=False))
     db.commit()
-    return {"alerts": alerts, "sightings": sightings, "detections": detections}
+    return {"alerts": alerts, "sightings": sightings, "detections": detections,
+            "traces": traces}
 
 
 def _autostart_workers():
